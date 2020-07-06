@@ -443,6 +443,8 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>::NumberOfParti
 {
     AMREX_ASSERT(lev >= 0 && lev < int(m_particles.size()));
 
+    resizeData();
+
     Long nparticles = 0;
     if (only_valid)
     {
