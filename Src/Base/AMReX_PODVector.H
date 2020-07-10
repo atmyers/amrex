@@ -96,7 +96,7 @@ namespace amrex
         }
     }
     
-    template <class T, class Allocator = std::allocator<T> >
+    template <class T, class Allocator = StdAllocator<T> >
     class PODVector : public Allocator
     {			
         static_assert(std::is_standard_layout<T>(), "PODVector can only hold standard layout types");
@@ -327,7 +327,7 @@ namespace amrex
         
         void assign (size_type a_count, const T& a_value) noexcept
         {
-            if ( a_count > capacity() ) AllocateBuffer(GetNewCapacity(a_count));
+            if ( a_count > capacity() ) AllocateBuffer(GetNewCapacity(a_count-capacity()), a_count);
             m_size = a_count;
             detail::uninitializedFillNImpl<Allocator>(m_data, a_count, a_value);
         }    
@@ -335,7 +335,8 @@ namespace amrex
         void assign (std::initializer_list<T> a_initializer_list) noexcept
         {
             if(a_initializer_list.size() > capacity())
-                AllocateBuffer(GetNewCapacity(a_initializer_list.size()));
+                AllocateBuffer(GetNewCapacity(a_initializer_list.size()-capacity()),
+                               a_initializer_list.size());
             m_size = a_initializer_list.size();        // copy the initializer list
             pointer dst = const_cast<iterator>(m_data);
             for (const auto& value : a_initializer_list) { *(dst++) = value; }
@@ -345,7 +346,7 @@ namespace amrex
         void assign (InputIt a_first, InputIt a_last) noexcept
         {
             size_t count = std::distance(a_first, a_last);
-            if (count > capacity()) AllocateBuffer(GetNewCapacity(count));
+            if (count > capacity()) AllocateBuffer(GetNewCapacity(count-capacity()), count);
             m_size = count;        pointer dst = const_cast<iterator>(m_data);
             while(a_first != a_last) { *(dst++) = *(a_first++); }
         }
@@ -355,14 +356,14 @@ namespace amrex
 	
         void push_back (const T& a_value) noexcept
         {
-            if (m_size == m_capacity) AllocateBuffer(GetNewCapacity(1));
+            if (m_size == m_capacity) AllocateBuffer(GetNewCapacity(1), m_size+1);
             m_data[m_size] = a_value;
             ++m_size;
         }
         
         void push_back (T&& a_value) noexcept
         {
-            if (m_size == m_capacity) AllocateBuffer(GetNewCapacity(1));
+            if (m_size == m_capacity) AllocateBuffer(GetNewCapacity(1), m_size+1);
             m_data[m_size] = std::move(a_value);
             ++m_size;
         }
@@ -425,7 +426,7 @@ namespace amrex
         
         void resize (size_type a_new_size) noexcept
         {
-            if (capacity() < a_new_size) AllocateBuffer(GetNewCapacity(a_new_size - capacity()));
+            if (capacity() < a_new_size) AllocateBuffer(GetNewCapacity(a_new_size - capacity()), a_new_size);
             m_size = a_new_size;
         }
 	
@@ -443,7 +444,7 @@ namespace amrex
         
         void reserve (size_type a_capacity) noexcept 
         {
-            if(capacity() < a_capacity) AllocateBuffer(a_capacity);
+            if(capacity() < a_capacity) AllocateBuffer(a_capacity, a_capacity);
         }
         
         void shrink_to_fit () noexcept
@@ -458,7 +459,7 @@ namespace amrex
             }
             else if ( current_size < capacity() )
             {
-                AllocateBuffer(current_size);
+                ShrinkBuffer(current_size);
             }
         }
         
@@ -491,6 +492,21 @@ namespace amrex
         }
         
         // this is where we would play games with the allocator
+        void AllocateBuffer (size_type a_capacity, size_type a_min_size) noexcept
+        {
+            auto r = this->grow(m_data, a_min_size, a_capacity);
+            pointer new_data = r.first;
+            std::size_t new_capacity = r.second;
+            if (new_data == m_data) {
+                m_capacity = new_capacity;
+            } else {
+                detail::memCopyImpl<Allocator>(new_data, m_data, size() * sizeof(T));
+                deallocate(m_data, capacity());
+                m_data = new_data;
+                m_capacity = new_capacity;
+            }
+        }
+
         void AllocateBuffer (size_type a_capacity) noexcept
         {
             pointer new_data = allocate(a_capacity);
@@ -500,27 +516,44 @@ namespace amrex
             m_capacity = a_capacity;
         }
         
+        void ShrinkBuffer (size_type a_capacity) noexcept
+        {
+            auto r = this->shrink(m_data, a_capacity);
+            pointer new_data = r.first;
+            size_type new_capacity = r.second;
+            if (new_data != m_data) {
+                detail::memCopyImpl<Allocator>(new_data, m_data, size() * sizeof(T));
+                deallocate(m_data, capacity());
+                m_data = new_data;
+            }
+            m_capacity = new_capacity;
+        }
+
         // need to have this version too
         void AllocateBufferForInsert(size_type a_capacity, size_type a_index, size_type a_count) noexcept
         {
             using namespace detail;
-            pointer new_data = allocate(a_capacity);
-            if (m_data)
-            {
+            auto r = this->grow(m_data, m_size+a_count, a_capacity);
+            pointer new_data = r.first;
+            std::size_t new_capacity = r.second;
+            if (new_data == m_data) {
+                memMoveImpl<Allocator>(m_data+a_index+a_count, m_data+a_index,
+                                       (size() - a_index)*sizeof(T), *this);
+            } else {
                 memCopyImpl<Allocator>(new_data, m_data, a_index * sizeof(T));
                 memCopyImpl<Allocator>(new_data + a_index + a_count, m_data + a_index,
                                        (size() - a_index)*sizeof(T));
+                deallocate(m_data, capacity());
+                m_data = new_data;
             }
-            deallocate(m_data, capacity());
-            m_data = new_data;
             m_size = size() + a_count;
-            m_capacity = a_capacity;
+            m_capacity = new_capacity;
         }
         
         PODVector& CopyAssignmentDoIt (const PODVector<T, Allocator>& a_vector, std::true_type) noexcept
         {
             const size_t other_size = a_vector.size();            
-            if ( other_size > capacity() ) { AllocateBuffer(other_size); }            
+            if ( other_size > capacity() ) { AllocateBuffer(other_size, other_size); }
             m_size = other_size;            
             detail::memCopyImpl<Allocator>(m_data, a_vector.m_data, size() * sizeof(T));
             return *this;
@@ -535,7 +568,7 @@ namespace amrex
             else
             {
                 const size_t other_size = a_vector.size();                
-                if ( other_size > capacity() ) { AllocateBuffer(other_size); }                
+                if ( other_size > capacity() ) { AllocateBuffer(other_size, other_size); }
                 m_size = other_size;                    
                 detail::memCopyImpl<Allocator>(m_data, a_vector.m_data, size() * sizeof(T));
                 Allocator::operator=(static_cast<Allocator const&>(a_vector));

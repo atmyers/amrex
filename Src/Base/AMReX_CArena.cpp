@@ -30,6 +30,17 @@ CArena::~CArena ()
     }
 }
 
+std::size_t
+CArena::biggestFreeBlock () const noexcept
+{
+    std::size_t biggest_free = 0;
+    for (const auto& node : m_freelist)
+    {
+        biggest_free = std::max(biggest_free, node.size());
+    }
+    return biggest_free;
+}
+
 void*
 CArena::alloc (std::size_t nbytes)
 {
@@ -110,13 +121,14 @@ CArena::alloc (std::size_t nbytes)
 void
 CArena::free (void* vp)
 {
-    std::lock_guard<std::mutex> lock(carena_mutex);
-
     if (vp == 0)
         //
         // Allow calls with NULL as allowed by C++ delete.
         //
         return;
+
+    std::lock_guard<std::mutex> lock(carena_mutex);
+
     //
     // `vp' had better be in the busy list.
     //
@@ -141,6 +153,13 @@ CArena::free (void* vp)
     // And remove from busy list.
     //
     m_busylist.erase(busy_it);
+
+    coalesce_freeblocks(free_it);
+}
+
+void
+CArena::coalesce_freeblocks (CArena::NL::iterator free_it)
+{
     //
     // Coalesce freeblock(s) on lo and hi side of this block.
     //
@@ -187,6 +206,109 @@ CArena::free (void* vp)
         node->size((*free_it).size() + (*hi_it).size());
         m_freelist.erase(hi_it);
     }
+}
+
+std::pair<void*,std::size_t>
+CArena::grow (void* pt, std::size_t min_size, std::size_t max_size)
+{
+    if (pt == nullptr) return std::make_pair(alloc(max_size), max_size);
+
+    max_size = Arena::align(max_size);
+
+    carena_mutex.lock();
+
+    auto busy_it = m_busylist.find(Node(pt,0,0));
+
+    BL_ASSERT(!(busy_it == m_busylist.end()));
+    BL_ASSERT(m_freelist.find(*busy_it) == m_freelist.end());
+
+    std::size_t current_size = busy_it->size();
+    if (current_size >= min_size)
+    {
+        carena_mutex.unlock();
+        return std::make_pair(pt, current_size);
+    }
+    else
+    {
+        void* pt2 = (char*)pt + current_size;
+        auto free_it = m_freelist.find(Node(pt2,0,0));
+        if (free_it == m_freelist.end() or not busy_it->coalescable(*free_it))
+        {
+            std::size_t biggest_free = biggestFreeBlock();
+            std::size_t new_alloc_size = max_size;
+            if ((biggest_free < max_size) and (biggest_free >= min_size)) new_alloc_size = biggest_free;
+            carena_mutex.unlock();
+            return std::make_pair(alloc(new_alloc_size), new_alloc_size);
+        }
+        else
+        {
+            std::size_t next_block_size = free_it->size();
+            std::size_t new_size = current_size + next_block_size;
+            if (new_size < min_size)
+            {
+                std::size_t biggest_free = biggestFreeBlock();
+                std::size_t new_alloc_size = max_size;
+                if ((biggest_free < max_size) and (biggest_free >= min_size)) new_alloc_size = biggest_free;
+                carena_mutex.unlock();
+                return std::make_pair(alloc(new_alloc_size), new_alloc_size);
+            }
+            else if (new_size <= max_size)
+            {
+                m_actually_used += next_block_size;
+                m_freelist.erase(free_it);
+                carena_mutex.unlock();
+                return std::make_pair(pt, new_size);
+            }
+            else
+            {
+                m_actually_used += next_block_size - (new_size-max_size);
+                void* pt3 = (char*)pt + max_size;
+                m_freelist.insert(free_it, Node(pt3, free_it->owner(), new_size-max_size));
+                m_freelist.erase(free_it);
+                carena_mutex.unlock();
+                return std::make_pair(pt, max_size);
+            }
+        }
+    }
+}
+
+std::pair<void*,std::size_t>
+CArena::shrink (void* pt, std::size_t desired_size)
+{
+    if (pt == nullptr) {
+        AMREX_ASSERT(desired_size == 0);
+        return std::make_pair(nullptr, 0);
+    }
+
+    desired_size = Arena::align(desired_size);
+
+    carena_mutex.lock();
+    
+    auto busy_it = m_busylist.find(Node(pt,0,0));
+
+    BL_ASSERT(!(busy_it == m_busylist.end()));
+    BL_ASSERT(m_freelist.find(*busy_it) == m_freelist.end());
+
+    std::size_t current_size = busy_it->size();
+    BL_ASSERT(current_size >= desired_size);
+
+    if (current_size > desired_size) {
+        std::size_t new_size = current_size - desired_size;
+        m_actually_used -= new_size;
+
+        void* block = static_cast<char*>(pt) + desired_size;
+        std::pair<NL::iterator,bool> pair_it = m_freelist.insert
+            (Node(block, busy_it->owner(), new_size));
+
+        BL_ASSERT(pair_it.second == true);
+        NL::iterator free_it = pair_it.first;
+        BL_ASSERT(free_it != m_freelist.end());
+
+        coalesce_freeblocks(free_it);
+    }
+
+    carena_mutex.unlock();
+    return std::make_pair(pt, desired_size);
 }
 
 std::size_t

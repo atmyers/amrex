@@ -47,6 +47,26 @@ public:
     */
     virtual void free (void* ap) override final;
 
+    /**
+    * Grow the capacity of given pointer.  Arena will try to grow the
+    * capacity of the given pointer to at least the minimum size.  If
+    * it cannot satisfy the minimum size requiement, new allocation
+    * will be made without deleting the given pointer.  The return
+    * value is a pair of pointer and its size.
+    */
+    virtual std::pair<void*,std::size_t>
+    grow (void* pt, std::size_t min_size, std::size_t max_size) override final;
+
+    /**
+    * Shrink the capacity of given pointer.  Arena will try to shrink
+    * the capacity of the given pointer without reallocating memory.
+    * It's an error if the current capacity is less than the
+    * desired_size.  The return value is a pair of pointer and its
+    * size.
+    */
+    virtual std::pair<void*,std::size_t>
+    shrink (void* pt, std::size_t desired_size) override final;
+
     //! The current amount of heap space used by the CArena object.
     std::size_t heap_space_used () const noexcept;
 
@@ -55,6 +75,9 @@ public:
 
     //! Return the amount of memory in this pointer.  Return 0 for unknown pointer.
     std::size_t sizeOf (void* p) const noexcept;
+
+    //! Return the size of the biggest block in the free list
+    std::size_t biggestFreeBlock () const noexcept;
 
     void PrintUsage (std::string const& name) const;
 
@@ -120,6 +143,8 @@ protected:
     * We use a set sorted from lo to hi memory addresses.
     */
     typedef std::set<Node> NL;
+
+    void coalesce_freeblocks (NL::iterator free_it);
 
     //! The list of blocks allocated via ::operator new().
     std::vector<std::pair<void*,std::size_t> > m_alloc;
