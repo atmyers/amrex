@@ -15,15 +15,15 @@ this as two-dimensional motion; here we have the option of solving in a 2D or 3D
 
 In other words, we want to solve for <img src="https://render.githubusercontent.com/render/math?math=\phi(x,y,t)"> by evolving 
 
-<img src="https://render.githubusercontent.com/render/math?math=\frac{\partial \phi}{\partial t} + \nabla \cdot (\bf{u^{spec}} \phi)  = 0">
+<img src="https://render.githubusercontent.com/render/math?math=\frac{\partial \phi}{\partial t} + \nabla \cdot (\bf{u^{spec}} \phi)  = 0" class="center">
 
 in time (<img src="https://render.githubusercontent.com/render/math?math=t">), where the velocity <img src="https://render.githubusercontent.com/render/math?math={\bf{u^{spec}}} = (u,v)"> is a divergence-free field computed by defining
 
-<img src="https://render.githubusercontent.com/render/math?math=\psi(i,j) = \sin^2(\pi x) \sin^2(\pi y)  \cos (\pi t / 2) / \pi">
+<img src="https://render.githubusercontent.com/render/math?math=\psi(i,j) = \sin^2(\pi x) \sin^2(\pi y)  \cos (\pi t / 2) / \pi" class="center">
 
 and defining
 
-<img src="https://render.githubusercontent.com/render/math?math=u = -\frac{\partial \psi}{\partial y},  v = \frac{\partial \psi}{\partial x}.">
+<img src="https://render.githubusercontent.com/render/math?math=u = -\frac{\partial \psi}{\partial y},  v = \frac{\partial \psi}{\partial x}." class="center">
 
 Note that because <img src="https://render.githubusercontent.com/render/math?math={\bf{u^{spec}}}"> is defined as the curl of a scalar field, it is analytically divergence-free
 
