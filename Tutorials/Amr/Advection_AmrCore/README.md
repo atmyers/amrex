@@ -17,15 +17,15 @@ In other words, we want to solve for <img src="https://render.githubusercontent.
 
 <img src="https://render.githubusercontent.com/render/math?math=\frac{\partial \phi}{\partial t} + \nabla \cdot (\bf{u^{spec}} \phi)  = 0">
 
-in time ($$t$$), where the velocity $${\bf{u^{spec}}} = (u,v)$$ is a divergence-free field computed by defining
+in time (<img src="https://render.githubusercontent.com/render/math?math=t">), where the velocity <img src="https://render.githubusercontent.com/render/math?math={\bf{u^{spec}}} = (u,v)"> is a divergence-free field computed by defining
 
-$$\psi(i,j) = \sin^2(\pi x) \sin^2(\pi y)  \cos (\pi t / 2) / \pi $$
+<img src="https://render.githubusercontent.com/render/math?math=\psi(i,j) = \sin^2(\pi x) \sin^2(\pi y)  \cos (\pi t / 2) / \pi">
 
 and defining
 
-$$u = -\frac{\partial \psi}{\partial y},  v = \frac{\partial \psi}{\partial x}.$$
+<img src="https://render.githubusercontent.com/render/math?math=u = -\frac{\partial \psi}{\partial y},  v = \frac{\partial \psi}{\partial x}.">
 
-Note that because $${\bf{u^{spec}}}$$ is defined as the curl of a scalar field, it is analytically divergence-free
+Note that because <img src="https://render.githubusercontent.com/render/math?math={\bf{u^{spec}}}"> is defined as the curl of a scalar field, it is analytically divergence-free
 
 In this example we'll be using AMR to resolve the scalar field since the location of the dye is
 what we care most about.
