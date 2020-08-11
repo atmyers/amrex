@@ -1,5 +1,3 @@
- use_math: true
-
 ##  Multi-Level Scalar Advection
 
 ### What Features Are We Using
@@ -9,7 +7,7 @@
 
 ### The Problem
 
-Consider a drop of dye (we'll define $$\phi$$ to be the concentration of dye) 
+Consider a drop of dye (we'll define <img src="https://render.githubusercontent.com/render/math?math=\phi"> to be the concentration of dye) 
 in a thin incompressible fluid that is spinning 
 clock-wise then counter-clockwise with a prescribed motion.  We consider the dye to be a 
 passive tracer that is advected by the fluid velocity.  The fluid is thin enough that we can model
