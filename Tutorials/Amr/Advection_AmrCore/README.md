@@ -13,9 +13,9 @@ clock-wise then counter-clockwise with a prescribed motion.  We consider the dye
 passive tracer that is advected by the fluid velocity.  The fluid is thin enough that we can model
 this as two-dimensional motion; here we have the option of solving in a 2D or 3D computational domain.
 
-In other words, we want to solve for $$\phi(x,y,t)$$ by evolving 
+In other words, we want to solve for <img src="https://render.githubusercontent.com/render/math?math=\phi(x,y,t)"> by evolving 
 
-$$\frac{\partial \phi}{\partial t} + \nabla \cdot (\bf{u^{spec}} \phi)  = 0$$
+<img src="https://render.githubusercontent.com/render/math?math=\frac{\partial \phi}{\partial t} + \nabla \cdot (\bf{u^{spec}} \phi)  = 0">
 
 in time ($$t$$), where the velocity $${\bf{u^{spec}}} = (u,v)$$ is a divergence-free field computed by defining
 
