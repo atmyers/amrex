@@ -52,16 +52,14 @@ void WriteBinaryParticleDataSync (PC const& pc,
     if ( ! pdir.empty() && pdir[pdir.size()-1] != '/') pdir += '/';
     pdir += name;
 
-    if ( ! pc.GetLevelDirectoriesCreated()) {
-        if (ParallelDescriptor::IOProcessor())
+    if (ParallelDescriptor::IOProcessor())
+    {
+        if ( ! amrex::UtilCreateDirectory(pdir, 0755))
         {
-            if ( ! amrex::UtilCreateDirectory(pdir, 0755))
-            {
-                amrex::CreateDirectoryFailed(pdir);
-            }
+            amrex::CreateDirectoryFailed(pdir);
         }
-        ParallelDescriptor::Barrier();
     }
+    ParallelDescriptor::Barrier();
 
     std::ofstream HdrFile;
 
@@ -90,12 +88,6 @@ void WriteBinaryParticleDataSync (PC const& pc,
 
     Gpu::Device::synchronize();
 
-    if(pc.GetUsePrePost())
-    {
-        nparticles = pc.GetNParticlesPrePost();
-        maxnextid  = pc.GetMaxNextIDPrePost();
-    }
-    else
     {
         nparticles = 0;
         maxnextid  = PC::ParticleType::NextID();
@@ -126,7 +118,6 @@ void WriteBinaryParticleDataSync (PC const& pc,
             HdrFileName += '/';
 
         HdrFileName += "Header";
-        pc.HdrFileNamePrePost = HdrFileName;
 
         HdrFile.open(HdrFileName.c_str(), std::ios::out|std::ios::trunc);
 
@@ -197,19 +188,10 @@ void WriteBinaryParticleDataSync (PC const& pc,
     pp.query("particles_nfiles",nOutFiles);
     if(nOutFiles == -1) nOutFiles = NProcs;
     nOutFiles = std::max(1, std::min(nOutFiles,NProcs));
-    pc.nOutFilesPrePost = nOutFiles;
 
     for (int lev = 0; lev <= pc.finestLevel(); lev++)
     {
-        bool gotsome;
-        if(pc.usePrePost)
-        {
-            gotsome = (pc.nParticlesAtLevelPrePost[lev] > 0);
-        }
-        else
-        {
-            gotsome = (pc.NumberOfParticlesAtLevel(lev) > 0);
-        }
+        bool gotsome = (pc.NumberOfParticlesAtLevel(lev) > 0);
 
         // We store the particles at each level in their own subdirectory.
         std::string LevelDir = pdir;
@@ -220,13 +202,10 @@ void WriteBinaryParticleDataSync (PC const& pc,
 
             LevelDir = amrex::Concatenate(LevelDir + "Level_", lev, 1);
 
-            if ( ! pc.GetLevelDirectoriesCreated())
-            {
-                if (ParallelDescriptor::IOProcessor())
-                    if ( ! amrex::UtilCreateDirectory(LevelDir, 0755))
-                        amrex::CreateDirectoryFailed(LevelDir);
-                ParallelDescriptor::Barrier();
-            }
+            if (ParallelDescriptor::IOProcessor())
+                if ( ! amrex::UtilCreateDirectory(LevelDir, 0755))
+                    amrex::CreateDirectoryFailed(LevelDir);
+            ParallelDescriptor::Barrier();
         }
 
         // Write out the header for each particle
@@ -257,9 +236,6 @@ void WriteBinaryParticleDataSync (PC const& pc,
         std::string filePrefix(LevelDir);
         filePrefix += '/';
         filePrefix += PC::ParticleType::DataPrefix();
-        if(pc.usePrePost) {
-            pc.filePrefixPrePost[lev] = filePrefix;
-        }
         bool groupSets(false), setBuf(true);
 
         if (gotsome)
@@ -271,45 +247,16 @@ void WriteBinaryParticleDataSync (PC const& pc,
                                   write_real_comp, write_int_comp, particle_io_flags);
             }
 
-            if(pc.usePrePost) {
-                pc.whichPrePost[lev] = which;
-                pc.countPrePost[lev] = count;
-                pc.wherePrePost[lev] = where;
-            } else {
-                ParallelDescriptor::ReduceIntSum (which.dataPtr(), which.size(), IOProcNumber);
-                ParallelDescriptor::ReduceIntSum (count.dataPtr(), count.size(), IOProcNumber);
-                ParallelDescriptor::ReduceLongSum(where.dataPtr(), where.size(), IOProcNumber);
-            }
+            ParallelDescriptor::ReduceIntSum (which.dataPtr(), which.size(), IOProcNumber);
+            ParallelDescriptor::ReduceIntSum (count.dataPtr(), count.size(), IOProcNumber);
+            ParallelDescriptor::ReduceLongSum(where.dataPtr(), where.size(), IOProcNumber);
         }
 
         if (ParallelDescriptor::IOProcessor())
         {
-            if(pc.GetUsePrePost()) {
-                // ---- write to the header and unlink in CheckpointPost
-            } else {
-                for (int j = 0; j < state.size(); j++)
-                {
-                    HdrFile << which[j] << ' ' << count[j] << ' ' << where[j] << '\n';
-                }
-
-                if (gotsome && pc.doUnlink)
-                {
-                    // Unlink any zero-length data files.
-                    Vector<Long> cnt(nOutFiles,0);
-
-                    for (int i = 0, N=count.size(); i < N; i++) {
-                        cnt[which[i]] += count[i];
-                    }
-
-                    for (int i = 0, N=cnt.size(); i < N; i++)
-                    {
-                        if (cnt[i] == 0)
-                        {
-                            std::string FullFileName = NFilesIter::FileName(i, filePrefix);
-                            FileSystem::Remove(FullFileName);
-                        }
-                    }
-                }
+            for (int j = 0; j < state.size(); j++)
+            {
+                HdrFile << which[j] << ' ' << count[j] << ' ' << where[j] << '\n';
             }
         }
     }
@@ -398,12 +345,9 @@ void WriteBinaryParticleDataAsync (PC const& pc,
 
     if (MyProc == IOProcNumber)
     {
-        if ( ! pc.GetLevelDirectoriesCreated())
+        if ( ! amrex::UtilCreateDirectory(pdir, 0755))
         {
-            if ( ! amrex::UtilCreateDirectory(pdir, 0755))
-            {
-                amrex::CreateDirectoryFailed(pdir);
-            }
+            amrex::CreateDirectoryFailed(pdir);
         }
 
         for (int lev = 0; lev <= pc.finestLevel(); lev++)
@@ -417,12 +361,9 @@ void WriteBinaryParticleDataAsync (PC const& pc,
 
                 LevelDir = amrex::Concatenate(LevelDir + "Level_", lev, 1);
 
-                if ( ! pc.GetLevelDirectoriesCreated())
+                if ( ! amrex::UtilCreateDirectory(LevelDir, 0755))
                 {
-                    if ( ! amrex::UtilCreateDirectory(LevelDir, 0755))
-                    {
-                        amrex::CreateDirectoryFailed(LevelDir);
-                    }
+                    amrex::CreateDirectoryFailed(LevelDir);
                 }
 
                 std::string HeaderFileName = LevelDir;

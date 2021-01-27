@@ -670,10 +670,6 @@ problems with particle IO, you could try varying some / all of these parameters.
 | datadigits_read   | This for backwards compatibility, don't use unless you need to read   | Int         | 5           |
 |                   | and old (pre mid 2017) AMReX dataset.                                 |             |             |
 +-------------------+-----------------------------------------------------------------------+-------------+-------------+
-| use_prepost       | This is an optimization for large particle datasets that groups MPI   | Bool        | False       |
-|                   | calls needed during the IO together. Try it seeing poor IO speeds     |             |             |
-|                   | on large problems.                                                    |             |             |
-+-------------------+-----------------------------------------------------------------------+-------------+-------------+
 
 The following runtime parameters affect the behavior of virtual particles in Nyx.
 

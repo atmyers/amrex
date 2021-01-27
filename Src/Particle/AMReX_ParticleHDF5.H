@@ -362,12 +362,7 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>
 
     Long nparticles = 0;
     Long maxnextid;
-    
-    if(usePrePost)
-    {
-        nparticles = nparticlesPrePost;
-        maxnextid  = maxnextidPrePost;
-    } else
+
     {
         nparticles = 0;
         maxnextid  = ParticleType::NextID();
@@ -423,8 +418,7 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>
     HDF5FileName += name;
     if (std::string::npos == HDF5FileName.find("h5") && std::string::npos == HDF5FileName.find("hdf5")) 
         HDF5FileName += ".h5";
-    HdrFileNamePrePost = HDF5FileName;
-	
+
     if (ParallelDescriptor::IOProcessor()) {
    
         // Have only one rank to create and write metadata (header)
@@ -583,10 +577,7 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>
         grp = H5Gopen(fid, level_name, H5P_DEFAULT);
 
         bool gotsome;
-	if(usePrePost)
-            gotsome = (nParticlesAtLevelPrePost[lev] > 0);
-        else
-            gotsome = (NumberOfParticlesAtLevel(lev) > 0);
+        gotsome = (NumberOfParticlesAtLevel(lev) > 0);
 
 
 	MFInfo info;
@@ -605,16 +596,10 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>
         if (gotsome)
 	{
             WriteParticlesHDF5(grp, lev, count, where);
-            
-	    if(usePrePost) {
-                whichPrePost[lev] = which;
-                countPrePost[lev] = count;
-                wherePrePost[lev] = where;
-	    } else {
-                ParallelDescriptor::ReduceIntSum (which.dataPtr(), which.size(), IOProcNumber);
-                ParallelDescriptor::ReduceIntSum (count.dataPtr(), count.size(), IOProcNumber);
-                ParallelDescriptor::ReduceLongSum(where.dataPtr(), where.size(), IOProcNumber);
-	    }
+
+            ParallelDescriptor::ReduceIntSum (which.dataPtr(), which.size(), IOProcNumber);
+            ParallelDescriptor::ReduceIntSum (count.dataPtr(), count.size(), IOProcNumber);
+            ParallelDescriptor::ReduceLongSum(where.dataPtr(), where.size(), IOProcNumber);
         }
 
         H5Gclose(grp);

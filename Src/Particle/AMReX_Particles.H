@@ -818,10 +818,6 @@ public:
                                   const Vector<std::string>&  int_comp_names,
 								  F&& f) const;
 
-    void CheckpointPre ();
-
-    void CheckpointPost ();
-
 #ifdef AMREX_USE_HDF5
     /**
      * \brief Writes a particle checkpoint to HDF5 file, suitable for restarting.
@@ -1051,10 +1047,6 @@ public:
                         const Vector<std::string>&  int_comp_names,
                         F&& f) const;
 
-    void WritePlotFilePre ();
-
-    void WritePlotFilePost ();
-
     void WriteAsciiFile (const std::string& file);
 
     int Verbose () { return m_verbose; }
@@ -1165,28 +1157,6 @@ public:
     static bool do_tiling;
     static IntVect tile_size;
 
-    void SetLevelDirectoriesCreated (bool tf) { levelDirectoriesCreated = tf; }
-
-    bool GetLevelDirectoriesCreated () const { return levelDirectoriesCreated; }
-
-    void SetUsePrePost (bool tf) const {
-      usePrePost = tf;
-    }
-    bool GetUsePrePost () const {
-      return usePrePost;
-    }
-
-    int GetMaxNextIDPrePost () const { return maxnextidPrePost; }
-    Long GetNParticlesPrePost () const { return nparticlesPrePost; }
-
-    void SetUseUnlink (bool tf) const {
-      doUnlink = tf;
-    }
-
-    bool GetUseUnlink () const {
-      return doUnlink;
-    }
-
     void RedistributeCPU (int lev_min = 0, int lev_max = -1, int nGrow = 0, int local=0);
 
     void RedistributeGPU (int lev_min = 0, int lev_max = -1, int nGrow = 0, int local=0);
@@ -1227,20 +1197,6 @@ public:
 
     int NumRealComps () const { return NArrayReal + NumRuntimeRealComps(); }
     int NumIntComps  () const { return NArrayInt  + NumRuntimeIntComps() ; }
-
-    //! ---- variables for i/o optimization saved for pre and post checkpoint
-    mutable bool levelDirectoriesCreated;
-    mutable bool usePrePost;
-    mutable bool doUnlink;
-    int maxnextidPrePost;
-    mutable int nOutFilesPrePost;
-    Long nparticlesPrePost;
-    Vector<Long> nParticlesAtLevelPrePost;          //!< ---- [level]
-    mutable Vector<Vector<int>>  whichPrePost;      //!< ---- [level]
-    mutable Vector<Vector<int>>  countPrePost;      //!< ---- [level]
-    mutable Vector<Vector<Long>> wherePrePost;      //!< ---- [level]
-    mutable std::string HdrFileNamePrePost;
-    mutable Vector<std::string> filePrefixPrePost;
 
 protected:
 

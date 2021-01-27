@@ -66,10 +66,6 @@ template <int NStructReal, int NStructInt, int NArrayReal, int NArrayInt,
 void
 ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator> :: Initialize ()
 {
-    levelDirectoriesCreated = false;
-    usePrePost = false;
-    doUnlink = true;
-
     SetParticleSize();
 
     static bool initialized = false;
@@ -89,9 +85,6 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator> :: 
                       "Particle type must be standard layout");
         //                   && std::is_trivial<ParticleType>::value,
         //                      "Particle type must be standard layout and trivial.");
-
-        pp.query("use_prepost", usePrePost);
-        pp.query("do_unlink", doUnlink);
 
         initialized = true;
     }
