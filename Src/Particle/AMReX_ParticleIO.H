@@ -774,7 +774,7 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
             // on finer levels, and put them in the right place via Redistribute()
 
             const int rank = ParallelDescriptor::MyProc();
-            const int NReaders = ParticleType::MaxReaders();
+            const int NReaders = MaxReaders();
             if (rank >= NReaders) return;
 
             const int Navg = ngrids[lev] / NReaders;
@@ -809,7 +809,7 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
             name += "Level_";
             name += amrex::Concatenate("", lev, 1);
             name += '/';
-            name += ParticleType::DataPrefix();
+            name += DataPrefix();
             name += amrex::Concatenate("", which[grid], DATA_Digits_Read);
 
             std::ifstream ParticleFile;

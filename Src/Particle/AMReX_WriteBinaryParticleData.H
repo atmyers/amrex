@@ -131,11 +131,11 @@ void WriteBinaryParticleDataSync (PC const& pc,
         //
         if (sizeof(typename PC::ParticleType::RealType) == 4)
         {
-            HdrFile << PC::ParticleType::Version() << "_single" << '\n';
+            HdrFile << PC::Version() << "_single" << '\n';
         }
         else
         {
-            HdrFile << PC::ParticleType::Version() << "_double" << '\n';
+            HdrFile << PC::Version() << "_double" << '\n';
         }
 
         int num_output_real = 0;
@@ -235,7 +235,8 @@ void WriteBinaryParticleDataSync (PC const& pc,
 
         std::string filePrefix(LevelDir);
         filePrefix += '/';
-        filePrefix += PC::ParticleType::DataPrefix();
+
+        filePrefix += PC::DataPrefix();
         bool groupSets(false), setBuf(true);
 
         if (gotsome)
@@ -460,11 +461,11 @@ void WriteBinaryParticleDataAsync (PC const& pc,
 
             if (sizeof(typename PC::ParticleType::RealType) == 4)
             {
-                HdrFile << PC::ParticleType::Version() << "_single" << '\n';
+                HdrFile << PC::Version() << "_single" << '\n';
             }
             else
             {
-                HdrFile << PC::ParticleType::Version() << "_double" << '\n';
+                HdrFile << PC::Version() << "_double" << '\n';
             }
 
             int num_output_real = 0;
@@ -549,7 +550,7 @@ void WriteBinaryParticleDataAsync (PC const& pc,
             LevelDir = amrex::Concatenate(LevelDir + "Level_", lev, 1);
             std::string filePrefix(LevelDir);
             filePrefix += '/';
-            filePrefix += PC::ParticleType::DataPrefix();
+            filePrefix += PC::DataPrefix();
             auto info = AsyncOut::GetWriteInfo(MyProc);
             std::string file_name = amrex::Concatenate(filePrefix, info.ifile, 5);
             std::ofstream ofs;

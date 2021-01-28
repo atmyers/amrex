@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <random>
 
+#include <AMReX_ParticleContainerBase.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_ParGDB.H>
 #include <AMReX_REAL.H>
@@ -115,8 +116,6 @@ struct ParticleInitType
     std::array<int,    NArrayInt  > int_array_data;
 };
 
-class ParticleContainerBase {};
-
 /**
  * \brief A distributed container for Particles sorted onto the levels, grids,
  * and tiles of a block-structured AMR hierarachy.
@@ -132,7 +131,7 @@ class ParticleContainerBase {};
  */
 template <int T_NStructReal, int T_NStructInt=0, int T_NArrayReal=0, int T_NArrayInt=0,
           template<class> class Allocator=DefaultAllocator>
-class ParticleContainer : ParticleContainerBase
+class ParticleContainer : public ParticleContainerBase
 {
 public:
     //! \brief number of extra Real components in the particle struct
@@ -432,7 +431,7 @@ public:
     //!
     //! \param lev The level.
     //!
-    const Geometry& Geom (int lev) const { return m_gdb->Geom(lev); }
+    const Geometry& Geom (int lev) const { return m_gdb->ParticleGeom(lev); }
 
     //! \brief Get the particle Geometry for a given level
     //!
@@ -539,10 +538,6 @@ public:
     * \param pdata
     */
     void InitNRandomPerCell (int n_per_cell, const ParticleInitData& pdata);
-
-    void MoveRandom ();
-
-    void MoveRandom (int level);
 
     void Increment (MultiFab& mf, int level);
 
