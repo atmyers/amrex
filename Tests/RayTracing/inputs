@@ -1,0 +1,4 @@
+ray.size = (256, 256, 384)
+ray.max_grid_size = 128
+ray.nlevs = 1
+
