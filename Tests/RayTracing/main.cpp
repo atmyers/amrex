@@ -23,6 +23,7 @@ using namespace amrex;
 
 struct TestParams
 {
+    std::string stl_filename;
     IntVect size;
     int max_grid_size;
     int nlevs;
@@ -46,6 +47,7 @@ void get_test_params (TestParams& params, const std::string& prefix)
     pp.get("size", params.size);
     pp.get("max_grid_size", params.max_grid_size);
     pp.get("nlevs", params.nlevs);
+    pp.get("stl_filename", params.stl_filename);
 }
 
 void getPermutationSequence (Gpu::DeviceVector<int>& indices_in,
@@ -123,7 +125,7 @@ void testRay ()
     TestParams params;
     get_test_params(params, "ray");
 
-    auto triangles = STL::read_stl("mesh/Utah_teapot.stl");
+    auto triangles = STL::read_stl(params.stl_filename);
     amrex::Print() << "Have " << triangles.size() << " triangles total. \n";
 
     // copy triangles to device

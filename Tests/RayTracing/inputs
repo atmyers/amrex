@@ -2,3 +2,5 @@ ray.size = (256, 256, 384)
 ray.max_grid_size = 128
 ray.nlevs = 1
 
+ray.stl_filename = "mesh/Utah_teapot.stl"
+#ray.stl_filename = "mesh/Sphericon.stl"
