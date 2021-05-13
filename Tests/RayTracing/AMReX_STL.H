@@ -3,6 +3,8 @@
 
 #include <AMReX_Print.H>
 #include <AMReX_Primitives.H>
+#include <AMReX_RealBox.H>
+#include <AMReX_GpuContainers.H>
 
 #include <string>
 #include <vector>
@@ -25,9 +27,15 @@ std::vector<Triangle> read_ascii_stl (const std::string& filename) noexcept;
 
 std::vector<Triangle> read_binary_stl (const std::string& filename) noexcept;
 
+/**
+   \brief Compute the lo and hi extrema over all the triangles
+*/
+RealBox getExtrema (Gpu::DeviceVector<Triangle>& triangles) noexcept;
+
 namespace detail {
     std::vector<std::string> split (std::string s, std::string delimiter) noexcept;
 }
+
 }
 }
 
