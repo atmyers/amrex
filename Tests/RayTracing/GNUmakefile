@@ -2,7 +2,7 @@ AMREX_HOME = ../../
 
 DEBUG	= FALSE
 DIM	= 3
-COMP    = llvm
+COMP    = gcc
 
 USE_MPI   = TRUE
 USE_OMP   = FALSE

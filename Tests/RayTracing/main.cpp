@@ -6,12 +6,17 @@
 #include <AMReX_Primitives.H>
 #include <AMReX_STL.H>
 #include <AMReX_Morton.H>
+#include <AMReX_GpuContainers.H>
 
 #include <string>
 #include <vector>
 #include <cstdint>
 #include <numeric>
 #include <algorithm>
+
+#ifdef AMREX_USE_CUB
+#include <cub/cub.cuh>
+#endif
 
 using namespace amrex;
 
@@ -34,12 +39,54 @@ int main (int argc, char* argv[])
     amrex::Finalize();
 }
 
-void get_test_params(TestParams& params, const std::string& prefix)
+void get_test_params (TestParams& params, const std::string& prefix)
 {
     ParmParse pp(prefix);
     pp.get("size", params.size);
     pp.get("max_grid_size", params.max_grid_size);
     pp.get("nlevs", params.nlevs);
+}
+
+void getPermutationSequence (Gpu::DeviceVector<int>& indices_in,
+                             const Gpu::DeviceVector<std::uint32_t>& codes_in) noexcept {
+    const std::size_t num_items = codes_in.size();
+    indices_in.resize(num_items);
+#ifdef AMREX_USE_GPU
+    auto indices_ptr = indices_in.dataPtr();
+    amrex::ParallelFor(num_items, [=] AMREX_GPU_DEVICE (int i) noexcept { indices_ptr[i] = i; });
+
+    Gpu::DeviceVector<int> indices_out(num_items);
+    Gpu::DeviceVector<std::uint32_t> codes_out(num_items);
+
+    // Determine temporary device storage requirements
+    void *d_temp_storage = NULL;
+    std::size_t temp_storage_bytes = 0;
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes,
+                                    codes_in.dataPtr(), codes_out.dataPtr(),
+                                    indices_in.dataPtr(), indices_out.dataPtr(), num_items);
+
+    // Allocate temporary storage
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+
+    // Run sorting operation
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes,
+                                    codes_in.dataPtr(), codes_out.dataPtr(),
+                                    indices_in.dataPtr(), indices_out.dataPtr(), num_items);
+
+    Gpu::copy(Gpu::deviceToDevice, indices_out.begin(), indices_out.end(), indices_in.begin());
+#else
+    std::iota(indices_in.begin(), indices_in.end(), 0);
+    {
+        std::vector<std::pair<std::uint32_t,int>> pairs;
+        for (std::size_t i = 0; i < num_items; ++i) {
+            pairs.push_back(std::make_pair(codes_in[i], indices_in[i]));
+        }
+        std::sort(pairs.begin(), pairs.end());
+        for (std::size_t i = 0; i < num_items; i++) {
+            indices_in[i] = pairs[i].second;
+        }
+    }
+#endif
 }
 
 void testRay ()
@@ -87,37 +134,42 @@ void testRay ()
     }
 
     auto triangles = STL::read_ascii_stl("mesh/Sphericon.stl");
-
     amrex::Print() << "Have " << triangles.size() << " triangles total. \n";
 
+    // copy triangles to device
+    Gpu::DeviceVector<Triangle> triangles_d(triangles.size());
+    Gpu::copy(Gpu::hostToDevice, triangles.begin(), triangles.end(), triangles_d.begin());
+
     // compute morton codes and bounding boxes for each primitive
-    std::vector<std::uint32_t> morton_codes;
-    std::vector<AABB> bboxes;
+    Gpu::DeviceVector<std::uint32_t> morton_codes_d(triangles.size());
+    Gpu::DeviceVector<AABB> bboxes_d(triangles.size());
     auto plo = geom[0].ProbLoArray();
     auto phi = geom[0].ProbHiArray();
-    for (const auto& tri : triangles) {
-        morton_codes.push_back(Morton::get32BitCode(tri.getCentroid(), plo, phi));
-        bboxes.emplace_back(tri.getAABB());
-    }
+    auto code_ptr = morton_codes_d.dataPtr();
+    auto bbox_ptr = bboxes_d.dataPtr();
+    auto tris_ptr = triangles_d.dataPtr();
+    amrex::ParallelFor(triangles.size(),
+                       [=] AMREX_GPU_DEVICE (int i) noexcept {
+                           const auto& tri = tris_ptr[i];
+                           code_ptr[i] = Morton::get32BitCode(tri.getCentroid(), plo, phi);
+                           bbox_ptr[i] = tri.getAABB();
+                       });
 
-    // compute ordering that puts primitives in morton order
-    std::vector<int> indices(morton_codes.size());
-    std::iota(indices.begin(), indices.end(), 0);
-    {
-        std::vector<std::pair<std::uint32_t,int>> pairs;
-        for (std::size_t i = 0; i < morton_codes.size(); ++i) {
-            pairs.push_back(std::make_pair(morton_codes[i], indices[i]));
-        }
-        std::sort(pairs.begin(), pairs.end());
-        for (std::size_t i = 0; i < morton_codes.size(); i++) {
-            indices[i] = pairs[i].second;
-        }
-    }
+    // Find ordering for the primitives that put them in morton order
+    Gpu::DeviceVector<int> indices_d;
+    getPermutationSequence(indices_d, morton_codes_d);
 
-    for (int i = 0; i < triangles.size(); ++i) {
+    // copy off and print the codes / permutation array
+    std::vector<int> indices(indices_d.size());
+    Gpu::copy(Gpu::deviceToHost, indices_d.begin(), indices_d.end(), indices.begin());
+
+    std::vector<std::uint32_t> morton_codes(morton_codes_d.size());
+    Gpu::copy(Gpu::deviceToHost, morton_codes_d.begin(), morton_codes_d.end(), morton_codes.begin());
+
+    for (std::size_t i = 0; i < triangles.size(); ++i) {
         amrex::Print() << morton_codes[indices[i]] << " ";
     }
-    amrex:Print() << "\n";
+    amrex::Print() << "\n";
 
     // the way this test is set up, if we make it here we pass
     amrex::Print() << "pass \n";
