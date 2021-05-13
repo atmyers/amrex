@@ -106,8 +106,11 @@ void testRay ()
     RealBox real_box;
     for (int n = 0; n < BL_SPACEDIM; n++)
     {
-        real_box.setLo(n, -1001.);
-        real_box.setHi(n,  1001.);
+        // NOTE we should figure this out automatically
+        //        real_box.setLo(n, -1001.);
+        //        real_box.setHi(n,  1001.);
+        real_box.setLo(n, -10.);
+        real_box.setHi(n,  10.);
     }
 
     IntVect domain_lo(AMREX_D_DECL(0, 0, 0));
@@ -133,7 +136,7 @@ void testRay ()
         size *= 2;
     }
 
-    auto triangles = STL::read_ascii_stl("mesh/Sphericon.stl");
+    auto triangles = STL::read_stl("mesh/Utah_teapot.stl");
     amrex::Print() << "Have " << triangles.size() << " triangles total. \n";
 
     // copy triangles to device

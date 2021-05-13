@@ -19,6 +19,26 @@ vector<string> STL::detail::split (string s, string delimiter) noexcept
     return res;
 }
 
+vector<Triangle> STL::read_stl (const string& filename) noexcept {
+    string line;
+    ifstream myfile(filename);
+    vector<Triangle> triangles;
+    if (myfile.is_open()) {
+        getline(myfile, line);
+            if (line.find("solid ") == 0) {
+                triangles = read_ascii_stl(filename);
+            }
+            else {
+                triangles = read_binary_stl(filename);
+            }
+    }
+    else {
+        amrex::Abort("Unable to open mesh file");
+    }
+
+    return triangles;
+}
+
 vector<Triangle> STL::read_ascii_stl (const string& filename) noexcept {
     string line;
     ifstream myfile(filename);
@@ -39,6 +59,47 @@ vector<Triangle> STL::read_ascii_stl (const string& filename) noexcept {
                 }
                 triangles.emplace_back(Triangle{coords[0], coords[1], coords[2]});
             }
+        }
+        myfile.close();
+    }
+    else {
+        amrex::Abort("Unable to open mesh file");
+    }
+
+    return triangles;
+}
+
+vector<Triangle> STL::read_binary_stl (const string& filename) noexcept {
+    string line;
+    ifstream myfile(filename, std::ios::in | std::ios::binary);
+    vector<Triangle> triangles;
+    if (myfile.is_open()) {
+        char header[80];
+        myfile.read(&header[0], 80*sizeof(char));
+
+        std::uint32_t num_triangles;
+        myfile.read((char*)&num_triangles, sizeof(std::uint32_t));
+
+        STL::BinaryTriangle tri;
+        for (std::size_t i = 0; i < num_triangles; ++i)
+        {
+            constexpr std::size_t tri_bytes = 50;
+            myfile.read((char*)&tri, tri_bytes);
+            Triangle new_tri;
+
+            new_tri.p0.x = tri.p0[0];
+            new_tri.p0.y = tri.p0[1];
+            new_tri.p0.z = tri.p0[2];
+
+            new_tri.p1.x = tri.p1[0];
+            new_tri.p1.y = tri.p1[1];
+            new_tri.p1.z = tri.p1[2];
+
+            new_tri.p2.x = tri.p2[0];
+            new_tri.p2.y = tri.p2[1];
+            new_tri.p2.z = tri.p2[2];
+
+            triangles.push_back(new_tri);
         }
         myfile.close();
     }
