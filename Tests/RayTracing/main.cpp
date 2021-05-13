@@ -7,6 +7,7 @@
 #include <AMReX_STL.H>
 #include <AMReX_Morton.H>
 #include <AMReX_GpuContainers.H>
+#include <AMReX_Reduce.H>
 
 #include <string>
 #include <vector>
@@ -89,11 +90,48 @@ void getPermutationSequence (Gpu::DeviceVector<int>& indices_in,
 #endif
 }
 
+/**
+   \brief Compute the lo and hi extrema over all the triangles
+*/
+RealBox getExtrema (Gpu::DeviceVector<Triangle>& triangles) noexcept {
+    ReduceOps<ReduceOpMin, ReduceOpMin, ReduceOpMin,
+              ReduceOpMax, ReduceOpMax, ReduceOpMax> reduce_op;
+    ReduceData<Real, Real, Real, Real, Real, Real> reduce_data(reduce_op);
+    using ReduceTuple = typename decltype(reduce_data)::Type;
+
+    const auto tris_ptr = triangles.dataPtr();
+    reduce_op.eval(triangles.size(), reduce_data,
+                   [=] AMREX_GPU_DEVICE (int i) -> ReduceTuple
+                   {
+                       const Triangle& tri = tris_ptr[i];
+                       return {amrex::min(tri.p0.x, tri.p1.x, tri.p2.x),
+                               amrex::min(tri.p0.y, tri.p1.y, tri.p2.y),
+                               amrex::min(tri.p0.z, tri.p1.z, tri.p2.z),
+                               amrex::max(tri.p0.x, tri.p1.x, tri.p2.x),
+                               amrex::max(tri.p0.y, tri.p1.y, tri.p2.y),
+                               amrex::max(tri.p0.z, tri.p1.z, tri.p2.z)};
+                   });
+
+    ReduceTuple hv = reduce_data.value(reduce_op);
+    return RealBox(amrex::get<0>(hv), amrex::get<1>(hv), amrex::get<2>(hv),
+                   amrex::get<3>(hv), amrex::get<4>(hv), amrex::get<5>(hv));
+}
+
 void testRay ()
 {
     BL_PROFILE("testRay");
     TestParams params;
     get_test_params(params, "ray");
+
+    auto triangles = STL::read_stl("mesh/Utah_teapot.stl");
+    amrex::Print() << "Have " << triangles.size() << " triangles total. \n";
+
+    // copy triangles to device
+    Gpu::DeviceVector<Triangle> triangles_d(triangles.size());
+    Gpu::copy(Gpu::hostToDevice, triangles.begin(), triangles.end(), triangles_d.begin());
+
+    RealBox real_box = getExtrema(triangles_d);
+    amrex::Print() << "RealBox is " << real_box << "\n";
 
     int is_per[BL_SPACEDIM];
     for (int i = 0; i < BL_SPACEDIM; i++)
@@ -102,16 +140,6 @@ void testRay ()
     Vector<IntVect> rr(params.nlevs-1);
     for (int lev = 1; lev < params.nlevs; lev++)
         rr[lev-1] = IntVect(AMREX_D_DECL(2,2,2));
-
-    RealBox real_box;
-    for (int n = 0; n < BL_SPACEDIM; n++)
-    {
-        // NOTE we should figure this out automatically
-        //        real_box.setLo(n, -1001.);
-        //        real_box.setHi(n,  1001.);
-        real_box.setLo(n, -10.);
-        real_box.setHi(n,  10.);
-    }
 
     IntVect domain_lo(AMREX_D_DECL(0, 0, 0));
     IntVect domain_hi(AMREX_D_DECL(params.size[0]-1,params.size[1]-1,params.size[2]-1));
@@ -135,13 +163,6 @@ void testRay ()
         lo += size/2;
         size *= 2;
     }
-
-    auto triangles = STL::read_stl("mesh/Utah_teapot.stl");
-    amrex::Print() << "Have " << triangles.size() << " triangles total. \n";
-
-    // copy triangles to device
-    Gpu::DeviceVector<Triangle> triangles_d(triangles.size());
-    Gpu::copy(Gpu::hostToDevice, triangles.begin(), triangles.end(), triangles_d.begin());
 
     // compute morton codes and bounding boxes for each primitive
     Gpu::DeviceVector<std::uint32_t> morton_codes_d(triangles.size());
