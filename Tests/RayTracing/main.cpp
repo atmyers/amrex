@@ -91,6 +91,19 @@ void getPermutationSequence (Gpu::DeviceVector<int>& indices_in,
 #endif
 }
 
+/**
+ * \brief Longest common prefix for morton codes
+ */
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+int longestCommonPrefix (std::uint32_t i, std::uint32_t j, std::uint32_t len) {
+    std::uint32_t a = i ^ j;
+    if (a > 0 && j < len) {
+        return amrex::clz(a);
+    } else {
+        return -1;
+    }
+}
+
 void testRay ()
 {
     BL_PROFILE("testRay");
