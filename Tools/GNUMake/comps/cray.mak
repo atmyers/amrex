@@ -11,9 +11,12 @@ CFLAGS   =
 FFLAGS   =
 F90FLAGS =
 
+AMREX_CCOMP = cray
+AMREX_FCOMP = cray
+
 ########################################################################
 
-ifneq ($(shell CC --version | grep "LLVM"),)
+ifneq ($(shell CC --version | grep -E "LLVM|clang"),)
   CRAY_IS_CLANG_BASED = TRUE
 else
   CRAY_IS_CLANG_BASED = FALSE
