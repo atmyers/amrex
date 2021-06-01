@@ -32,6 +32,7 @@ add_amrex_define( AMREX_COMM_PROFILING  IF AMReX_COMM_PROFILE )
 
 # Tiny profiler
 add_amrex_define( AMREX_TINY_PROFILING NO_LEGACY IF AMReX_TINY_PROFILE )
+add_amrex_define( AMREX_USE_ROCTX NO_LEGACY IF AMReX_ROCTX )
 
 # Mem profiler
 add_amrex_define( AMREX_MEM_PROFILING NO_LEGACY IF AMReX_MEM_PROFILE )
@@ -46,6 +47,7 @@ add_amrex_define( AMREX_USE_OMP IF AMReX_OMP )
 # DPCPP
 add_amrex_define( AMREX_USE_DPCPP NO_LEGACY IF AMReX_DPCPP )
 add_amrex_define( AMREX_USE_GPU NO_LEGACY IF AMReX_DPCPP )
+add_amrex_define( AMREX_USE_ONEDPL NO_LEGACY IF AMReX_DPCPP_ONEDPL )
 
 # HIP
 add_amrex_define( AMREX_USE_HIP NO_LEGACY IF AMReX_HIP )
@@ -158,6 +160,12 @@ endif ()
 #
 add_amrex_define(AMREX_USE_HDF5 NO_LEGACY IF AMReX_HDF5)
 add_amrex_define(AMREX_USE_HDF5_ASYNC NO_LEGACY IF AMReX_HDF5_ASYNC)
+
+
+#
+# SUNDIALS
+#
+add_amrex_define(AMREX_USE_SUNDIALS NO_LEGACY IF AMReX_SUNDIALS)
 
 #
 # Miscellaneous

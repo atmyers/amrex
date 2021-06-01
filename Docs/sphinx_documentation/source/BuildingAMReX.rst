@@ -62,6 +62,9 @@ list of important variables.
    | AMREX_CUDA_ARCH | CUDA arch such as 70                | 70 if not set      |
    |    or CUDA_ARCH |                                     | or detected        |
    +-----------------+-------------------------------------+--------------------+
+   | AMREX_AMD_ARCH  | AMD GPU arch such as gfx908         | none if the        |
+   |    or AMD_ARCH  |                                     | machine is unknown |
+   +-----------------+-------------------------------------+--------------------+
 
 .. raw:: latex
 
@@ -470,6 +473,8 @@ The list of available options is reported in the :ref:`table <tab:cmakevar>` bel
    +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
    | AMReX_PROFPARSER             |  Build with profile parser support              | NO                      | YES, NO               |
    +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
+   | AMReX_ROCTX                  |  Build with roctx markup profiling support      | NO                      | YES, NO               |
+   +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
    | AMReX_FPE                    |  Build with Floating Point Exceptions checks    | NO                      | YES, NO               |
    +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
    | AMReX_ASSERTIONS             |  Build with assertions turned on                | NO                      | YES, NO               |
@@ -485,6 +490,8 @@ The list of available options is reported in the :ref:`table <tab:cmakevar>` bel
    | AMReX_HYPRE                  |  Enable HYPRE interfaces                        | NO                      | YES, NO               |
    +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
    | AMReX_PETSC                  |  Enable PETSc interfaces                        | NO                      | YES, NO               |
+   +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
+   | AMReX_SUNDIALS               |  Enable SUNDIALS interfaces                     | NO                      | YES, NO               |
    +------------------------------+-------------------------------------------------+-------------------------+-----------------------+
    | AMReX_HDF5                   |  Enable HDF5-based I/O                          | NO                      | YES, NO               |
    +------------------------------+-------------------------------------------------+-------------------------+-----------------------+

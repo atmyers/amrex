@@ -153,6 +153,10 @@ cmake_dependent_option( AMReX_DPCPP_SPLIT_KERNEL "Enable DPCPP kernel splitting"
    "AMReX_GPU_BACKEND STREQUAL SYCL" OFF)
 print_option(  AMReX_DPCPP_SPLIT_KERNEL )
 
+cmake_dependent_option( AMReX_DPCPP_ONEDPL "Enable DPCPP's oneDPL algorithms"  OFF
+   "AMReX_GPU_BACKEND STREQUAL SYCL" OFF)
+print_option(  AMReX_DPCPP_ONEDPL )
+
 # --- HIP ----
 if (AMReX_HIP)
    set(AMReX_AMD_ARCH_DEFAULT "IGNORE")
@@ -268,6 +272,10 @@ if (AMReX_HDF5_ASYNC)
    message(FATAL_ERROR "\nAMReX_HDF5_ASYNC not yet supported\n")
 endif ()
 
+# SUNDIALS
+option( AMReX_SUNDIALS "Enable SUNDIALS interfaces" OFF )
+print_option( AMReX_SUNDIALS )
+
 
 #
 # Miscellanoues options  =====================================================
@@ -316,6 +324,10 @@ print_option( AMReX_COMM_PROFILE )
 cmake_dependent_option(AMReX_PROFPARSER "Enable profile parser" OFF
    "AMReX_BASE_PROFILE;AMReX_TRACE_PROFILE;AMReX_AMRDATA" OFF)
 print_option( AMReX_PROFPARSER )
+
+cmake_dependent_option(AMReX_ROCTX  "Enable roctx markup for HIP with ROCm" OFF
+     "AMReX_GPU_BACKEND STREQUAL HIP" OFF)
+print_option( AMReX_ROCTX )
 
 set(AMReX_TP_PROFILE_VALUES IGNORE CRAYPAT FORGE VTUNE)
 set(AMReX_TP_PROFILE IGNORE CACHE STRING "Third-party profiling options: <CRAYPAT,FORGE,VTUNE>")
