@@ -1,4 +1,5 @@
-intersect.size = (128, 128, 128)
-intersect.max_grid_size = 32
-intersect.is_periodic = 0
-intersect.nlevs = 1
+nitems = 100000017
+nbins = 5000
+
+#nitems = 20
+#nbins = 4

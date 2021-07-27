@@ -95,6 +95,9 @@ public:
      * \tparam N the 'size' type that can enumerate all the items
      * \tparam F a function that maps items to IntVect bins
      *
+     * This version uses a 3D box to specificy the index space over which the bins
+     * are defined.
+     *
      * \param nitems the number of items to put in the bins
      * \param v pointer to the start of the items
      * \param bx the Box that defines the space over which the bins will be defined
@@ -103,25 +106,48 @@ public:
     template <typename N, typename F>
     void build (N nitems, T const* v, const Box& bx, F&& f)
     {
+        const auto lo = lbound(bx);
+        const auto hi = ubound(bx);
+        build(nitems, v, bx.numPts(),
+              [=] AMREX_GPU_DEVICE (const T& t) noexcept
+              {
+                  auto iv = f(t);
+                  auto iv3 = iv.dim3();
+                  int nx = hi.x-lo.x+1;
+                  int ny = hi.y-lo.y+1;
+                  int nz = hi.z-lo.z+1;
+                  index_type uix = amrex::min(nx-1,amrex::max(0,iv3.x));
+                  index_type uiy = amrex::min(ny-1,amrex::max(0,iv3.y));
+                  index_type uiz = amrex::min(nz-1,amrex::max(0,iv3.z));
+                  return (uix * ny + uiy) * nz + uiz;
+              });
+    }
+
+    /**
+     * \brief Populate the bins with a set of items.
+     *
+     * \tparam N the 'size' type that can enumerate all the items
+     * \tparam F a function that maps items to IntVect bins
+     *
+     * This version uses a 1D index space for the set of bins.
+     *
+     * \param nitems the number of items to put in the bins
+     * \param v pointer to the start of the items
+     * \param nbins the number of bins to use
+     * \param f a function object that maps items to bins
+     */
+    template <typename N, typename F>
+    void build (N nitems, T const* v, int /*nbins*/, F&& f)
+    {
         BL_PROFILE("SparseBins<T>::build");
 
         m_items = v;
 
         Gpu::HostVector<index_type> host_cells(nitems);
         std::map<index_type, index_type> bins_map;
-        const auto lo = lbound(bx);
-        const auto hi = ubound(bx);
         for (int i = 0; i < nitems; ++i)
         {
-            bin_type iv = f(v[i]);
-            auto iv3 = iv.dim3();
-            int nx = hi.x-lo.x+1;
-            int ny = hi.y-lo.y+1;
-            int nz = hi.z-lo.z+1;
-            index_type uix = amrex::min(nx-1,amrex::max(0,iv3.x));
-            index_type uiy = amrex::min(ny-1,amrex::max(0,iv3.y));
-            index_type uiz = amrex::min(nz-1,amrex::max(0,iv3.z));
-            host_cells[i] = (uix * ny + uiy) * nz + uiz;
+            host_cells[i] = f(v[i]);
             bins_map[host_cells[i]] += 1;
         }
 
