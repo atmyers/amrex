@@ -1445,6 +1445,130 @@ DistributionMapping::makeKnapSack (const Vector<Real>& rcost, Real& eff, int nma
 }
 
 DistributionMapping
+DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
+                                         const Real& threshold,
+                                         const DistributionMapping& current_dm,
+                                         bool broadcastToAll, int root)
+{
+    BL_PROFILE("makeSimpleSwapping");
+
+    Vector<Real> costs(costs_local.size());
+    ParallelDescriptor::GatherLayoutDataToVector<Real>(costs_local, costs, root);
+
+    DistributionMapping new_dm;
+    Vector<int> new_pmap = current_dm.ProcessorMap();
+    if (ParallelDescriptor::MyProc() == root)
+    {
+        int nprocs = ParallelContext::NProcsSub();
+        Vector<Real> cost_per_rank(nprocs, 0.0);
+        for(Long n=0; n < costs.size(); ++n)
+        {
+            // need to convert from local context to global?
+            cost_per_rank[current_dm[n]] += costs[n];
+        }
+
+        Real avg_cost = 0.0;
+        Real max_cost = 0.0;
+        for (Long i = 0; i < cost_per_rank.size(); ++i)
+        {
+            avg_cost += cost_per_rank[i];
+            max_cost = std::max(cost_per_rank[i], max_cost);
+        }
+        avg_cost /= nprocs;
+
+        amrex::Print() << "Before load balance:\n";
+        amrex::Print() << "Average cost per rank is " << avg_cost << "\n";
+        amrex::Print() << "Max cost is  " << max_cost << "\n";
+        amrex::Print() << "Load imbalance " << (max_cost / avg_cost) - 1.0 << "\n \n";
+
+        std::map<int, std::vector<int> > boxes_by_proc;
+        for (Long i = 0; i < current_dm.size(); ++i)
+        {
+            // need to convert from local context to global?
+            boxes_by_proc[current_dm[i]].push_back(i);
+        }
+
+        Vector<std::pair<int, Real> > loads(nprocs);
+        for (Long i = 0; i < loads.size(); ++i)
+        {
+            loads[i].first = i;
+            loads[i].second = cost_per_rank[i] / avg_cost;
+        }
+
+        std::sort(loads.begin(), loads.end(),
+                  [] (const auto &a, const auto &b) {
+                      return a.second < b.second;
+                  });
+
+        Long i = loads.size()-1;
+        Long num_moved = 0;
+        Long num_try = 0;
+        Long first_target = 0;
+        while (i > 0) {
+            if (loads[i].second < threshold) { break; }
+            if (verbose) {
+                amrex::Print() << "Attemping to balance rank " << loads[i].first
+                          << " which has initial cost " << loads[i].second << "\n";
+            }
+            Long j = first_target;
+            while (j < loads.size() - 1) {
+                if (loads[i].second < threshold) { break; }
+                for (const auto& b : boxes_by_proc[loads[i].first]) {
+                    if (loads[i].second < threshold) { break; }
+                    if (verbose) {
+                        amrex::Print() << "Trying box " << b << " with cost " << costs[b] << "\n";
+                    }
+                    if (costs[b] == 0) { continue; }
+                    ++num_try;
+                    if ((costs[b]/avg_cost) + loads[j].second < threshold) {
+                        if (verbose) {
+                            amrex::Print() << "moving box " << b << " with cost " << costs[b]
+                                      << " from rank " << loads[i].first
+                                      << " to rank " << loads[j].first << "\n";
+                        }
+                        ++num_moved;
+                        new_pmap[b] = loads[j].first;
+                        loads[j].second += (costs[b] / avg_cost);
+                        loads[i].second -= (costs[b] / avg_cost);
+                        if (verbose) {
+                            amrex::Print() << "new cost of rank " << loads[i].first << " is "
+                                      << loads[i].second << "\n";
+                            amrex::Print() << "new cost of rank " << loads[j].first << " is "
+                                      << loads[j].second << "\n";
+                        }
+                    } else {
+                        if (verbose) {
+                            amrex::Print() << "Can't move because would put rank ";
+                            amrex::Print() << loads[j].first << " up to cost ";
+                            amrex::Print() << (costs[b]/avg_cost) + loads[j].second << "\n";
+                        }
+                    }
+                }
+                first_target = ++j;
+            }
+            --i;
+        }
+
+        new_dm = DistributionMapping(new_pmap);
+    }
+
+#ifdef BL_USE_MPI
+    if (broadcastToAll)
+    {
+        ParallelDescriptor::Bcast(&new_pmap[0], new_pmap.size(), root);
+        if (ParallelDescriptor::MyProc() != root)
+        {
+            new_dm = DistributionMapping(new_pmap);
+        }
+    }
+#else
+    amrex::ignore_unused(broadcastToAll);
+#endif
+
+    return new_dm;
+}
+
+DistributionMapping
 DistributionMapping::makeKnapSack (const LayoutData<Real>& rcost_local,
                                    Real& currentEfficiency, Real& proposedEfficiency,
                                    int nmax, bool broadcastToAll, int root)

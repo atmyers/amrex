@@ -252,6 +252,12 @@ class DistributionMapping
                                                       const Vector<Real>& cost,
                                                       Real* efficiency);
 
+    static DistributionMapping makeSimpleSwapping (const LayoutData<Real>& rcost_local,
+                                                   const Real& threshold,
+                                                   const DistributionMapping& current_dm,
+                                                   bool broadcastToAll=true,
+                                                   int root=ParallelDescriptor::IOProcessorNumber());
+
 private:
 
     const Vector<int>& getIndexArray ();
