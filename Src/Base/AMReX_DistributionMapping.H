@@ -253,6 +253,8 @@ class DistributionMapping
                                                       Real* efficiency);
 
     static DistributionMapping makeSimpleSwapping (const LayoutData<Real>& rcost_local,
+                                                   Real& currentEfficiency,
+                                                   Real& proposedEfficiency,
                                                    const Real& threshold,
                                                    const DistributionMapping& current_dm,
                                                    bool broadcastToAll=true,

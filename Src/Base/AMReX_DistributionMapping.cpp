@@ -1446,6 +1446,7 @@ DistributionMapping::makeKnapSack (const Vector<Real>& rcost, Real& eff, int nma
 
 DistributionMapping
 DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
+                                         Real& currentEfficiency, Real& proposedEfficiency,
                                          const Real& threshold,
                                          const DistributionMapping& current_dm,
                                          bool broadcastToAll, int root)
@@ -1475,7 +1476,8 @@ DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
             max_cost = std::max(cost_per_rank[i], max_cost);
         }
         avg_cost /= nprocs;
-
+        currentEfficiency = avg_cost / max_cost;
+        
         amrex::Print() << "Before load balance:\n";
         amrex::Print() << "Average cost per rank is " << avg_cost << "\n";
         amrex::Print() << "Max cost is  " << max_cost << "\n";
@@ -1549,6 +1551,31 @@ DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
             --i;
         }
 
+        cost_per_rank.resize(0);
+        cost_per_rank.resize(nprocs, 0.0);
+        for(Long n=0; n < costs.size(); ++n)
+        {
+            // need to convert from local context to global?
+            cost_per_rank[new_pmap[n]] += costs[n];
+        }
+
+        avg_cost = 0.0;
+        max_cost = 0.0;
+        for (Long i = 0; i < cost_per_rank.size(); ++i)
+        {
+            avg_cost += cost_per_rank[i];
+            max_cost = std::max(cost_per_rank[i], max_cost);
+        }
+        avg_cost /= nprocs;
+        proposedEfficiency = avg_cost / max_cost;
+        
+        amrex::Print() << "After load balance:\n";
+        amrex::Print() << "Average cost per rank is " << avg_cost << "\n";
+        amrex::Print() << "Max cost is  " << max_cost << "\n";
+        amrex::Print() << "Load imbalance " << (max_cost / avg_cost) - 1.0 << "\n \n";
+        amrex::Print() << "Num moved is " << num_moved << " / " << new_pmap.size() << "\n";
+        amrex::Print() << "Num tried is " << num_try << " / " << new_pmap.size() << "\n";
+        
         new_dm = DistributionMapping(new_pmap);
     }
 
