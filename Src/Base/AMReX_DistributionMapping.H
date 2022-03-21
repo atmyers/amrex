@@ -252,6 +252,10 @@ class DistributionMapping
                                                       const Vector<Real>& cost,
                                                       Real* efficiency);
 
+    static void ComputeDistributionMappingEfficiency (const Vector<int>& pmap,
+                                                      const Vector<Real>& cost,
+                                                      Real* efficiency);
+    
     static DistributionMapping makeSimpleSwapping (const LayoutData<Real>& rcost_local,
                                                    Real& currentEfficiency,
                                                    Real& proposedEfficiency,

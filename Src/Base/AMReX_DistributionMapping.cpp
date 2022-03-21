@@ -1477,7 +1477,7 @@ DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
         }
         avg_cost /= nprocs;
         currentEfficiency = avg_cost / max_cost;
-        
+
         amrex::Print() << "Before load balance:\n";
         amrex::Print() << "Average cost per rank is " << avg_cost << "\n";
         amrex::Print() << "Max cost is  " << max_cost << "\n";
@@ -1568,14 +1568,14 @@ DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
         }
         avg_cost /= nprocs;
         proposedEfficiency = avg_cost / max_cost;
-        
+
         amrex::Print() << "After load balance:\n";
         amrex::Print() << "Average cost per rank is " << avg_cost << "\n";
         amrex::Print() << "Max cost is  " << max_cost << "\n";
         amrex::Print() << "Load imbalance " << (max_cost / avg_cost) - 1.0 << "\n \n";
         amrex::Print() << "Num moved is " << num_moved << " / " << new_pmap.size() << "\n";
         amrex::Print() << "Num tried is " << num_try << " / " << new_pmap.size() << "\n";
-        
+
         new_dm = DistributionMapping(new_pmap);
     }
 
@@ -1666,6 +1666,14 @@ DistributionMapping::ComputeDistributionMappingEfficiency (const DistributionMap
                                                            const Vector<Real>& cost,
                                                            Real* efficiency)
 {
+    ComputeDistributionMappingEfficiency(dm.ProcessorMap(), cost, efficiency);
+}
+
+void
+DistributionMapping::ComputeDistributionMappingEfficiency (const Vector<int>& pmap,
+                                                           const Vector<Real>& cost,
+                                                           Real* efficiency)
+{
     const int nprocs = ParallelDescriptor::NProcs();
 
     // This will store mapping from processor to the costs of FABs it controls,
@@ -1675,9 +1683,9 @@ DistributionMapping::ComputeDistributionMappingEfficiency (const DistributionMap
 
     // Count the number of costs belonging to each rank
     Vector<int> cnt(nprocs);
-    for (int i=0; i<dm.size(); ++i)
+    for (int i=0; i<pmap.size(); ++i)
     {
-        ++cnt[dm[i]];
+        ++cnt[pmap[i]];
     }
 
     for (int i=0; i<rankToCosts.size(); ++i)
@@ -1687,7 +1695,7 @@ DistributionMapping::ComputeDistributionMappingEfficiency (const DistributionMap
 
     for (int i=0; i<cost.size(); ++i)
     {
-        rankToCosts[dm[i]].push_back(cost[i]);
+        rankToCosts[pmap[i]].push_back(cost[i]);
     }
 
     Real maxCost = -1.0;
