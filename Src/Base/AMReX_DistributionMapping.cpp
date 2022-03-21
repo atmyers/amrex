@@ -1561,10 +1561,10 @@ DistributionMapping::makeSimpleSwapping (const LayoutData<Real>& costs_local,
 
         avg_cost = 0.0;
         max_cost = 0.0;
-        for (Long i = 0; i < cost_per_rank.size(); ++i)
+        for (Long ir = 0; ir < cost_per_rank.size(); ++ir)
         {
-            avg_cost += cost_per_rank[i];
-            max_cost = std::max(cost_per_rank[i], max_cost);
+            avg_cost += cost_per_rank[ir];
+            max_cost = std::max(cost_per_rank[ir], max_cost);
         }
         avg_cost /= nprocs;
         proposedEfficiency = avg_cost / max_cost;
