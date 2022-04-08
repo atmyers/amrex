@@ -1273,7 +1273,6 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
                h_redistribute_real_comp, local);
 
     amrex::PODVector<char, PolymorphicArenaAllocator<char> > snd_buffer;
-    snd_buffer.m_arena = The_Arena();
     Gpu::DeviceVector<char> rcv_buffer;
 
     packBuffer(*this, op, plan, snd_buffer);
@@ -1322,7 +1321,7 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
         Gpu::PinnedVector<char> pinned_snd_buffer;
         Gpu::PinnedVector<char> pinned_rcv_buffer;
 
-        if (snd_buffer.m_arena == The_Arena()) {
+        if (snd_buffer.arena() == The_Arena()) {
             pinned_snd_buffer.resize(snd_buffer.size());
             Gpu::dtoh_memcpy_async(pinned_snd_buffer.dataPtr(), snd_buffer.dataPtr(), snd_buffer.size());
             plan.buildMPIFinish(BufferMap());

@@ -146,13 +146,13 @@ namespace amrex {
         inline value_type* allocate(std::size_t n)
         {
             value_type* result = nullptr;
-            result = (value_type*) m_arena->alloc(n * sizeof(T));
+            result = (value_type*) arena()->alloc(n * sizeof(T));
             return result;
         }
 
         inline void deallocate(value_type* ptr, std::size_t)
         {
-            if (ptr != nullptr) { m_arena->free(ptr); }
+            if (ptr != nullptr) { arena()->free(ptr); }
         }
 
         Arena* arena () const noexcept {
