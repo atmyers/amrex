@@ -309,6 +309,10 @@ void packBuffer (const PC& pc, const ParticleCopyOp& op, const ParticleCopyPlan&
     {
         total_buffer_size = plan.m_snd_offsets.back();
     }
+
+    if (total_buffer_size > Gpu::Device::freeMemAvailable()) {
+        snd_buffer.m_arena = The_Pinned_Arena();
+    }
     snd_buffer.resize(total_buffer_size);
 
     auto p_comm_real = plan.d_real_comp_mask.dataPtr();
@@ -441,9 +445,9 @@ void unpackBuffer (PC& pc, const ParticleCopyPlan& plan, const Buffer& snd_buffe
     }
 }
 
-template <class PC, class Buffer,
+template <class PC, class SndBuffer, class RcvBuffer,
           std::enable_if_t<IsParticleContainer<PC>::value, int> foo = 0>
-void communicateParticlesStart (const PC& pc, ParticleCopyPlan& plan, const Buffer& snd_buffer, Buffer& rcv_buffer)
+void communicateParticlesStart (const PC& pc, ParticleCopyPlan& plan, const SndBuffer& snd_buffer, RcvBuffer& rcv_buffer)
 {
     BL_PROFILE("amrex::communicateParticlesStart");
 

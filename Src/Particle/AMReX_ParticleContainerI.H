@@ -1272,7 +1272,8 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
     plan.build(*this, op, h_redistribute_int_comp,
                h_redistribute_real_comp, local);
 
-    Gpu::DeviceVector<char> snd_buffer;
+    amrex::PODVector<char, PolymorphicArenaAllocator<char> > snd_buffer;
+    snd_buffer.m_arena = The_Arena();
     Gpu::DeviceVector<char> rcv_buffer;
 
     packBuffer(*this, op, plan, snd_buffer);
@@ -1320,11 +1321,18 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
         Gpu::Device::synchronize();
         Gpu::PinnedVector<char> pinned_snd_buffer;
         Gpu::PinnedVector<char> pinned_rcv_buffer;
-        pinned_snd_buffer.resize(snd_buffer.size());
-        Gpu::dtoh_memcpy_async(pinned_snd_buffer.dataPtr(), snd_buffer.dataPtr(), snd_buffer.size());
-        plan.buildMPIFinish(BufferMap());
-        Gpu::Device::synchronize();
-        communicateParticlesStart(*this, plan, pinned_snd_buffer, pinned_rcv_buffer);
+
+        if (snd_buffer.m_arena == The_Arena()) {
+            pinned_snd_buffer.resize(snd_buffer.size());
+            Gpu::dtoh_memcpy_async(pinned_snd_buffer.dataPtr(), snd_buffer.dataPtr(), snd_buffer.size());
+            plan.buildMPIFinish(BufferMap());
+            Gpu::Device::synchronize();
+            communicateParticlesStart(*this, plan, pinned_snd_buffer, pinned_rcv_buffer);
+        } else {
+            plan.buildMPIFinish(BufferMap());
+            Gpu::Device::synchronize();
+            communicateParticlesStart(*this, plan, snd_buffer, pinned_rcv_buffer);
+        }
         rcv_buffer.resize(pinned_rcv_buffer.size());
         unpackBuffer(*this, plan, snd_buffer, RedistributeUnpackPolicy());
         communicateParticlesFinish(plan);
