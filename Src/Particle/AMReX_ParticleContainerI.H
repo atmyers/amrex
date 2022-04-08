@@ -1321,17 +1321,18 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt, Allocator>
         Gpu::PinnedVector<char> pinned_snd_buffer;
         Gpu::PinnedVector<char> pinned_rcv_buffer;
 
-        if (snd_buffer.arena() == The_Arena()) {
+        if (snd_buffer.arena()->isPinned()) {
+            plan.buildMPIFinish(BufferMap());
+            Gpu::Device::synchronize();
+            communicateParticlesStart(*this, plan, snd_buffer, pinned_rcv_buffer);
+        } else {
             pinned_snd_buffer.resize(snd_buffer.size());
             Gpu::dtoh_memcpy_async(pinned_snd_buffer.dataPtr(), snd_buffer.dataPtr(), snd_buffer.size());
             plan.buildMPIFinish(BufferMap());
             Gpu::Device::synchronize();
             communicateParticlesStart(*this, plan, pinned_snd_buffer, pinned_rcv_buffer);
-        } else {
-            plan.buildMPIFinish(BufferMap());
-            Gpu::Device::synchronize();
-            communicateParticlesStart(*this, plan, snd_buffer, pinned_rcv_buffer);
         }
+
         rcv_buffer.resize(pinned_rcv_buffer.size());
         unpackBuffer(*this, plan, snd_buffer, RedistributeUnpackPolicy());
         communicateParticlesFinish(plan);
