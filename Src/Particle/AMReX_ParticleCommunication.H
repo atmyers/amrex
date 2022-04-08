@@ -297,7 +297,7 @@ void packBuffer (const PC& pc, const ParticleCopyOp& op, const ParticleCopyPlan&
     int num_levels = op.numLevels();
     int num_buckets = pc.BufferMap().numBuckets();
 
-    Long total_buffer_size = 0;
+    std::size_t total_buffer_size = 0;
     if (plan.m_snd_offsets.size() == 0)
     {
         unsigned int np = 0;
