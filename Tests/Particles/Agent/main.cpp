@@ -118,10 +118,10 @@ public:
                {
                    auto cell_start = offsets[i_cell];
                    auto cell_stop  = offsets[i_cell+1];
-                   for (int i = cell_start; i < cell_stop; ++i) {
+                   for (unsigned int i = cell_start; i < cell_stop; ++i) {
                        auto pindex = inds[i];
                        if (d_ptr[pindex] == 1) {
-                           for (int j = cell_start; j < cell_stop; ++j) {
+                           for (unsigned int j = cell_start; j < cell_stop; ++j) {
                                if (i == j) { continue; }
                                auto pindex2 = inds[j];
                                if (amrex::Random(engine) < 0.5) {
