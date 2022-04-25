@@ -86,7 +86,7 @@ public:
    {
        BL_PROFILE("interactAgents");
 
-       IntVect bin_size = {AMREX_D_DECL(4, 4, 4)};
+       IntVect bin_size = {AMREX_D_DECL(2, 2, 2)};
        for (int lev = 0; lev < numLevels(); ++lev)
        {
            const Geometry& geom = Geom(lev);
