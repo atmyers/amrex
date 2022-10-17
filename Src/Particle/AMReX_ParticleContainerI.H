@@ -2026,14 +2026,32 @@ RedistributeMPI (std::map<int, Vector<char> >& not_ours,
 
                 auto p = make_particle<ParticleType>{}(ptile.getParticleTileData(),ipart);
 
-                std::memcpy(&p, pbuf, sizeof(ParticleType));
+                if constexpr(ParticleType::is_soa_particle) {
+                    auto * const pbuf_real = reinterpret_cast<amrex::ParticleReal*>(pbuf);
+                    AMREX_D_TERM(
+                        p.pos(0) = pbuf_real[0];,
+                        p.pos(1) = pbuf_real[1];,
+                        p.pos(2) = pbuf_real[2];
+                    )
+                }
+                else {
+                    std::memcpy(&p, pbuf, sizeof(ParticleType));
+                }
+                
                 pbuf += sizeof(ParticleType);
                 ptile.push_back(p);
                 int array_comp_start = AMREX_SPACEDIM + NStructReal;
                 for (int comp = 0; comp < NumRealComps(); ++comp) {
                     if (h_redistribute_real_comp[array_comp_start + comp]) {
                         ParticleReal rdata;
-                        std::memcpy(&rdata, pbuf, sizeof(ParticleReal));
+                        if constexpr(ParticleType::is_soa_particle) {
+                            auto * const pbuf_int = reinterpret_cast<int*>(pbuf + sizeof(amrex::ParticleReal)*AMREX_SPACEDIM);
+                            p.id() = pbuf_int[0];
+                            p.cpu() = pbuf_int[1];
+                        }
+                        else {
+                            std::memcpy(&p, pbuf, sizeof(ParticleType));
+                        }
                         pbuf += sizeof(ParticleReal);
                         ptile.push_back_real(comp, rdata);
                     } else {
