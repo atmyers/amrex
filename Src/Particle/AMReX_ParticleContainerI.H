@@ -305,7 +305,7 @@ template <typename ParticleType, int NArrayReal, int NArrayInt,
           template<class> class Allocator>
 void
 ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator>::locateParticle (ParticleType& p, ParticleLocData& pld,
-                                                                                   int lev_min, int lev_max, int nGrow, int local_grid) const
+                                                                                        int lev_min, int lev_max, int nGrow, int local_grid) const
 {
     bool outside = AMREX_D_TERM(p.pos(0) <  Geom(0).ProbLo(0)
                              || p.pos(0) >= Geom(0).ProbHi(0),
@@ -1575,7 +1575,7 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator>
 
                             p.id() = -p.id(); // Invalidate the particle
                             }
-                        }
+                      }
                     else {
                        auto& particles_to_send = tmp_remote[who][thread_num];
                        auto old_size = particles_to_send.size();
@@ -1627,7 +1627,7 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator>
                 }
             }
 
-            } else{
+              } else{ // soa particle
 
               auto particle_tile = ptile_ptrs[pmap_it];
               if (npart != 0) {
@@ -1659,7 +1659,6 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator>
                   particlePostLocate(p, pld, lev);
 
                   if (p.id() < 0){
-
                       p = ParticleType(ptd,last);
                       for (int comp = 0; comp < NumRealComps(); comp++)
                           soa.GetRealData(comp)[pindex] = soa.GetRealData(comp)[last];
@@ -1687,7 +1686,7 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator>
                           }
 
                           p.id() = -p.id(); // Invalidate the particle
-                        } 
+                        }
                     }
                   else {
                       auto& particles_to_send = tmp_remote[who][thread_num];
@@ -1712,7 +1711,6 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator>
                               dst += sizeof(int);
                             }
                         }
-
                       p.id() = -p.id(); // Invalidate the particle
                     }
 
@@ -1873,10 +1871,6 @@ RedistributeMPI (std::map<int, Vector<char> >& not_ours,
 
 #ifdef AMREX_USE_MPI
 
-    int particle_size=0;
-    int superparticle_size = particle_size +
-        num_real_comm_comps*sizeof(ParticleReal) + num_int_comm_comps*sizeof(int);
-
     using buffer_type = unsigned long long;
 
     std::map<int, Vector<buffer_type> > mpi_snd_data;
@@ -1996,10 +1990,28 @@ RedistributeMPI (std::map<int, Vector<char> >& not_ours,
                 auto& ptile = m_particles[rcv_levs[ipart]][std::make_pair(rcv_grid[ipart],
                                                                           rcv_tile[ipart])];
 
-                auto p = make_particle<ParticleType>{}(ptile.getParticleTileData(),ipart);
-                
-                std::memcpy(&p, pbuf, sizeof(ParticleType));
-                locateParticle(p, pld, lev_min, lev_max, nGrow);
+                Particle<ParticleType::NReal, ParticleType::NInt> p;
+                if constexpr(!ParticleType::is_soa_particle)
+                {
+                    std::memcpy(&p, pbuf, sizeof(ParticleType));
+                } else
+                {
+                    std::memcpy(&p.pos(0), pbuf                         , sizeof(ParticleReal));
+                    std::memcpy(&p.pos(1), pbuf +   sizeof(ParticleReal), sizeof(ParticleReal));
+                    std::memcpy(&p.pos(2), pbuf + 2*sizeof(ParticleReal), sizeof(ParticleReal));
+                }
+
+                bool success = Where(p, pld, lev_min, lev_max, 0);
+                if (!success)
+                {
+                    success = (nGrow > 0) && Where(p, pld, lev_min, lev_min, nGrow);
+                    pld.m_grown_gridbox = pld.m_gridbox; // reset grown box for subsequent calls.
+                }
+                if (!success)
+                {
+                    amrex::Abort("RedistributeMPI_locate:: invalid particle.");
+                }
+
                 rcv_levs[ipart] = pld.m_lev;
                 rcv_grid[ipart] = pld.m_grid;
                 rcv_tile[ipart] = pld.m_tile;
@@ -2024,34 +2036,18 @@ RedistributeMPI (std::map<int, Vector<char> >& not_ours,
                                                                           rcv_tile[ipart])];
                 char* pbuf = ((char*) &recvdata[offset]) + j*superparticle_size;
 
-                auto p = make_particle<ParticleType>{}(ptile.getParticleTileData(),ipart);
-
-                if constexpr(ParticleType::is_soa_particle) {
-                    auto * const pbuf_real = reinterpret_cast<amrex::ParticleReal*>(pbuf);
-                    AMREX_D_TERM(
-                        p.pos(0) = pbuf_real[0];,
-                        p.pos(1) = pbuf_real[1];,
-                        p.pos(2) = pbuf_real[2];
-                    )
-                }
-                else {
+                if constexpr(! ParticleType::is_soa_particle) {
+                    ParticleType p;
                     std::memcpy(&p, pbuf, sizeof(ParticleType));
+                    pbuf += sizeof(ParticleType);
+                    ptile.push_back(p);
                 }
-                
-                pbuf += sizeof(ParticleType);
-                ptile.push_back(p);
+
                 int array_comp_start = AMREX_SPACEDIM + NStructReal;
                 for (int comp = 0; comp < NumRealComps(); ++comp) {
                     if (h_redistribute_real_comp[array_comp_start + comp]) {
                         ParticleReal rdata;
-                        if constexpr(ParticleType::is_soa_particle) {
-                            auto * const pbuf_int = reinterpret_cast<int*>(pbuf + sizeof(amrex::ParticleReal)*AMREX_SPACEDIM);
-                            p.id() = pbuf_int[0];
-                            p.cpu() = pbuf_int[1];
-                        }
-                        else {
-                            std::memcpy(&p, pbuf, sizeof(ParticleType));
-                        }
+                        std::memcpy(&rdata, pbuf, sizeof(ParticleReal));
                         pbuf += sizeof(ParticleReal);
                         ptile.push_back_real(comp, rdata);
                     } else {
@@ -2073,7 +2069,7 @@ RedistributeMPI (std::map<int, Vector<char> >& not_ours,
                 ++ipart;
             }
         }
-            
+
 #else
         Vector<std::map<std::pair<int, int>, Gpu::HostVector<ParticleType> > > host_particles;
         host_particles.reserve(15);

@@ -320,7 +320,7 @@ numParticlesOutOfRange (Iterator const& pti, IntVect nGrow)
     [=] AMREX_GPU_DEVICE (int i) -> ReduceTuple
     {
         ParticleType p(tile_data,i);
-        if ((p.id() < 0)) return false;
+        if ((p.id() < 0)) { return false; }
         IntVect iv = IntVect(
             AMREX_D_DECL(int(amrex::Math::floor((p.pos(0)-plo[0])*dxi[0])),
                          int(amrex::Math::floor((p.pos(1)-plo[1])*dxi[1])),
