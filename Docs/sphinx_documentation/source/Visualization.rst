@@ -333,7 +333,7 @@ To open a plotfile (for example, you could run the
 
 
 Creating and Loading ``.series`` Files
------------------
+--------------------------------------
 
 Another useful feature in ParaView to load and re-load a group of plotfiles is using a ``.series`` file
 (similar to the ``.visit`` file in VisIt). It is a text file (say ``plot_files.series``) which lists
