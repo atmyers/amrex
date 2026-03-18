@@ -276,3 +276,49 @@ void MyFunction (int variable, MultiFab& data)
 ```
 Additional information regarding Doxygen comment formatting can be found
 in the [Doxygen Manual](https://www.doxygen.nl/manual/).
+
+## LLM-assisted workflows
+
+Large Language Models (LLMs) can assist with AMReX development by helping to understand the existing
+codebase, writing new code, reviewing pull requests, finding bugs, and adding tests and documentation.
+This section of the developer's guide documents how the AMReX repository is configured for LLM-based coding assistants
+and how to get the most out of them.
+
+> **_NOTE:_**  LLMs can hallucinate and sometimes produce code that compiles and runs but is incorrect. LMM-written code should
+be manually reviewed with care before opening a pull request. Please respect the AMReX maintainers' time by making sure you understand
+any bot-generated code before requesting a review.
+
+## Best Practices
+
+When working with LLM coding assistants, keep in mind that *"most best practices are based on one constraint: [the] context window fills up fast, and performance degrades as it fills"* (`Claude Code Best Practices <https://code.claude.com/docs/en/best-practices>`__).
+Starting from examples and iterating incrementally — as described below — helps keep sessions focused and productive.
+
+#. **Start small and iterate incrementally .**
+   Run your coding existant inside the AMReX source directory.
+   Point the assistant to an existing function, Test, or example code and ask it modify it, gradually addiing complexity and verifying along the way.
+
+#. **Write a test.**
+   Give the agent a way to verify its work. Often, the agent itself can write tests first, then implement functionality.
+
+#. **Be specific in your prompts.**
+   Reference specific files, tell the agent where to look for code patterns, and describe specific cases to test.
+
+### Connecting to a documentation Context through an MCP Server
+
+A `Model Context Protocol (MCP) <https://modelcontextprotocol.io>`__ server is a standardized way to provide external context, such as library documentation, to LLM-based coding assistants.
+When an MCP server is configured, the assistant can query up-to-date AMReX documentation on demand, rather than relying solely on its training data. This is helpful because agents might otherwise rely on out-of-date information from their training data and/or have to read too many files into their contexts to perform development tasks.
+
+## Setting Up Context7 as an MCP Server
+
+`Context7 <https://context7.com>`__ is a service that indexes open-source project documentation and serves it through the MCP protocol.
+AMReX documentation is available at:
+
+    `context7.com/amrex-codes/amrex <https://context7.com/amrex-codes/amrex>`__
+
+Once connected, a coding assistant (Claude Code, Cursor, VS Code Copilot, Windsurf, etc.) can retrieve relevant sections of the AMReX documentation in real time when helping you develop applications and inputs files.
+
+`pyAMReX <https://pyamrex.readthedocs.io>`__ documentation is also available at:
+
+- **pyAMReX**: `context7.com/amrex-codes/pyamrex <https://context7.com/amrex-codes/pyamrex>`__
+
+For popular coding assistants, see the `Context7 documentation <https://context7.com/docs/resources/all-clients>`__ to configure `AMReX <https://context7.com/amrex-codes/codes>`.
