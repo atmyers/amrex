@@ -402,6 +402,21 @@ public:
     Gpu::DeviceVector<int> d_int_comp_mask, d_real_comp_mask;
     Long m_superparticle_size;
 
+    // Metadata send buffers must stay alive until buildMPIStartRest completes.
+    std::map<int, Vector<int>> m_snd_data;
+
+#ifdef AMREX_USE_MPI
+    Vector<MPI_Request> m_hs_rreqs;
+    Vector<MPI_Request> m_hs_sreqs;
+    Vector<MPI_Status>  m_hs_rstats;
+    Vector<MPI_Status>  m_hs_sstats;
+
+    MPI_Request m_reduce_scatter_req = MPI_REQUEST_NULL;
+    Long m_num_rcvs_rs = 0;
+    Vector<Long> m_snd_connectivity;
+    Vector<int> m_rcv_connectivity;
+#endif
+
     Long superParticleSize() const { return m_superparticle_size; }
 
     template <class PC>
@@ -413,10 +428,25 @@ public:
                 bool local, IntVect max_cells_moved)
     {
         BL_PROFILE("ParticleCopyPlan::build");
+        buildNonMPI(pc, op, int_comp_mask, real_comp_mask,
+                    local, max_cells_moved);
+        buildMPIStartHandshake(pc, pc.BufferMap());
+        buildMPIStartRest(pc, pc.BufferMap(), m_superparticle_size);
+    }
+
+    template <class PC>
+    requires (IsParticleContainer<PC>::value)
+    void buildNonMPI (const PC& pc,
+                      const ParticleCopyOp& op,
+                      const Vector<int>& int_comp_mask,
+                      const Vector<int>& real_comp_mask,
+                      bool local, IntVect max_cells_moved)
+    {
+        BL_PROFILE("ParticleCopyPlan::buildNonMPI");
 
         ParmParse pp("particles");
         pp.query("do_one_sided_comms", m_do_one_sided_comms);
-          const int num_buckets = pc.BufferMap().numBuckets();
+        const int num_buckets = pc.BufferMap().numBuckets();
 
         AMREX_ASSERT(!local || max_cells_moved.allGE(0));
         m_local = local;
@@ -504,8 +534,6 @@ public:
         }
         m_superparticle_size += num_real_comm_comp * sizeof(typename PC::ParticleType::RealType)
                               + num_int_comm_comp  * sizeof(int);
-
-        buildMPIStart(pc, pc.BufferMap(), m_superparticle_size);
     }
 
     template <class PC>
@@ -535,36 +563,35 @@ public:
 
     void buildMPIFinish (const ParticleBufferMap& map);
 
+    void buildMPIStartHandshake (const ParticleContainerBase& pc,
+                                 const ParticleBufferMap& map);
+
+    void buildMPIStartRest (const ParticleContainerBase& pc,
+                            const ParticleBufferMap& map, Long psize);
+
 private:
 
     void buildMPIStart (const ParticleContainerBase& pc, const ParticleBufferMap& map, Long psize);
 
-    //
-    // Snds - a Vector with the number of bytes that is process will send to each proc.
-    // Rcvs - a Vector that, after calling this method, will contain the
-    //        number of bytes this process will receive from each proc.
-    //
     void doHandShake (const ParticleContainerBase& pc, const Vector<Long>& Snds, Vector<Long>& Rcvs) const;
+    void doHandShakeStart (const ParticleContainerBase& pc, const Vector<Long>& Snds);
+    void doHandShakeFinish (const ParticleContainerBase& pc, const Vector<Long>& Snds,
+                            Vector<Long>& Rcvs);
 
-    //
-    // In the local version of this method, each proc knows which other
-    // procs it could possibly receive messages from, meaning we can do
-    // this purely with point-to-point communication.
-    //
     void doHandShakeLocal (const Vector<Long>& Snds, Vector<Long>& Rcvs) const;
+    void doHandShakeLocalStart (const Vector<Long>& Snds);
+    void doHandShakeLocalFinish (Vector<Long>& Rcvs);
 
-    //
-    // In the global version, we don't know who we'll receive from, so we
-    // need to do some collective communication first.
-    //
     static void doHandShakeReduceScatter (const Vector<Long>& Snds, Vector<Long>& Rcvs);
+    void doHandShakeReduceScatterStart (const Vector<Long>& Snds);
+    void doHandShakeReduceScatterFinish (const Vector<Long>& Snds, Vector<Long>& Rcvs);
 
-    //
-    // Another version of the global handshake implemented with MPI-3
-    // one-sided communication.
-    //
     static void doHandShakeOneSided (const ParticleContainerBase& pc,
                                      const Vector<Long>& Snds, Vector<Long>& Rcvs);
+    static void doHandShakeOneSidedStart (const ParticleContainerBase& pc,
+                                          const Vector<Long>& Snds);
+    static void doHandShakeOneSidedFinish (const ParticleContainerBase& pc,
+                                           Vector<Long>& Rcvs);
 
     //
     // Another version of the above that is implemented using MPI All-to-All

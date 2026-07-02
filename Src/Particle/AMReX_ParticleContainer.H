@@ -1309,6 +1309,16 @@ public:
                             bool local, IntVect max_cells_moved,
                             bool remove_negative=true);
 
+    // Async split of the IntVect Redistribute overload. Call Redistribute_start
+    // for all containers before calling Redistribute_finish for any of them so
+    // that the handshake communications can overlap. Containers must be
+    // processed in the same order on every rank.
+    void Redistribute_start (int lev_min, int lev_max, IntVect nGrow,
+                             bool local, IntVect max_cells_moved,
+                             bool remove_negative=true);
+
+    void Redistribute_finish ();
+
     void ReserveForRedistribute (ParticleCopyPlan const& plan);
 
     Long superParticleSize() const { return superparticle_size; }
@@ -1615,6 +1625,22 @@ private:
     // names of both compile-time and runtime Real and Int SoA data
     std::vector<std::string> m_soa_rdata_names;
     std::vector<std::string> m_soa_idata_names;
+
+    struct RedistributeState
+    {
+        ParticleCopyOp op;
+        ParticleCopyPlan plan;
+        amrex::PODVector<char, PolymorphicArenaAllocator<char>> snd_buffer;
+        amrex::PODVector<char, PolymorphicArenaAllocator<char>> rcv_buffer;
+        Gpu::PinnedVector<char> pinned_snd_buffer;
+        Gpu::PinnedVector<char> pinned_rcv_buffer;
+        Vector<std::map<std::pair<int,int>, int>> new_sizes;
+        int lev_min = 0;
+        int lev_max = -1;
+        IntVect nGrow = IntVect(0);
+        int theEffectiveFinestLevel = 0;
+    };
+    std::unique_ptr<RedistributeState> m_redistribute_state;
 };
 
 /// \ingroup amrex_particles

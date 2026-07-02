@@ -67,7 +67,9 @@ public:
         const IntVect nGrow(0);
         const bool local = true;
         const IntVect max_cells_moved(1);
-        Redistribute(lev_min, lev_max, nGrow, local, max_cells_moved, remove_neg);
+        Redistribute_start(lev_min, lev_max, nGrow, local, max_cells_moved,
+                           remove_neg);
+        Redistribute_finish();
     }
 
     void RedistributeGlobal (bool remove_neg=true)
