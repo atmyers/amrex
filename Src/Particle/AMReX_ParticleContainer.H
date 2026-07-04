@@ -1285,6 +1285,24 @@ public:
     void Redistribute_impl (int lev_min = 0, int lev_max = -1, int nGrow = 0, int local=0,
                             bool remove_negative=true);
 
+    //! \brief Computes, for each particle in [lev_min, lev_max], the grid/tile/level
+    //! it should move to, recording the moves in `op`/`new_sizes`. Used by both
+    //! Redistribute_impl and RedistributeMultiple. `lev_max` is resolved in place
+    //! (from -1 to the effective finest level) so callers observe the same value
+    //! Redistribute_impl would have used; `theEffectiveFinestLevel` is likewise
+    //! returned for use by ClearMovedParticles.
+    void RedistributePartition (int lev_min, int& lev_max, int nGrow, int local,
+                                bool remove_negative,
+                                ParticleCopyOp& op,
+                                Vector<std::map<std::pair<int, int>, int> >& new_sizes,
+                                int& theEffectiveFinestLevel);
+
+    //! \brief Shrinks tiles down to `new_sizes` (removing particles that were
+    //! moved out by RedistributePartition) and drops now-empty entries/levels.
+    //! Used by both Redistribute_impl and RedistributeMultiple.
+    void ClearMovedParticles (int lev_min, int lev_max, int theEffectiveFinestLevel,
+                             Vector<std::map<std::pair<int, int>, int> >& new_sizes);
+
     void ReserveForRedistribute (ParticleCopyPlan const& plan);
 
     Long superParticleSize() const { return superparticle_size; }

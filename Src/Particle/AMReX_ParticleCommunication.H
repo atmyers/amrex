@@ -404,15 +404,20 @@ public:
 
     Long superParticleSize() const { return m_superparticle_size; }
 
+    //! \brief Does all the local (non-MPI) work of build(): assigns destination
+    //! slot indices for each copy and computes this plan's superparticle size.
+    //! Split out from build() so that RedistributeMultiple can run this step
+    //! for several plans before doing a single merged MPI handshake/metadata
+    //! exchange across all of them (see buildMPIStartMultiple).
     template <class PC>
     requires (IsParticleContainer<PC>::value)
-    void build (const PC& pc,
-                const ParticleCopyOp& op,
-                const Vector<int>& int_comp_mask,
-                const Vector<int>& real_comp_mask,
-                int local)
+    void buildLocal (const PC& pc,
+                     const ParticleCopyOp& op,
+                     const Vector<int>& int_comp_mask,
+                     const Vector<int>& real_comp_mask,
+                     int local)
     {
-        BL_PROFILE("ParticleCopyPlan::build");
+        BL_PROFILE("ParticleCopyPlan::buildLocal");
 
         ParmParse pp("particles");
         pp.query("do_one_sided_comms", m_do_one_sided_comms);
@@ -503,13 +508,66 @@ public:
         }
         m_superparticle_size += num_real_comm_comp * sizeof(typename PC::ParticleType::RealType)
                               + num_int_comm_comp  * sizeof(int);
+    }
 
+    template <class PC>
+    requires (IsParticleContainer<PC>::value)
+    void build (const PC& pc,
+                const ParticleCopyOp& op,
+                const Vector<int>& int_comp_mask,
+                const Vector<int>& real_comp_mask,
+                int local)
+    {
+        BL_PROFILE("ParticleCopyPlan::build");
+
+        buildLocal(pc, op, int_comp_mask, real_comp_mask, local);
         buildMPIStart(pc, pc.BufferMap(), m_superparticle_size);
     }
 
     void clear ();
 
     void buildMPIFinish (const ParticleBufferMap& map);
+
+    //! \brief Holds the MPI bookkeeping shared by a batch of plans while their
+    //! handshake/metadata exchange is merged into a single round by
+    //! buildMPIStartMultiple/buildMPIFinishMultiple. One instance is created by
+    //! the caller (e.g. RedistributeMultiple) and threaded through both calls.
+    struct MultiExchange
+    {
+        Vector<Long> Snds, Rcvs;
+        Vector<int> RcvProc;
+        Vector<std::size_t> rOffset;
+        Gpu::HostVector<int> rcv_data;
+        mutable Vector<MPI_Request> build_rreqs;
+        mutable Vector<MPI_Status> build_stats;
+        Long NumSnds = 0;
+        int nrcvs = 0;
+    };
+
+    //! \brief Merges the handshake + metadata exchange of buildMPIStart across
+    //! several plans that share the same ParGDB/grids into a single round of
+    //! communication, instead of one round per plan. Each `plans[i]` must have
+    //! already had `buildLocal()` called on it (so its `m_box_counts_h`,
+    //! `m_neighbor_procs`, `m_local`, `m_superparticle_size` etc. are
+    //! populated); this call fills in `m_snd_num_particles`/send-side
+    //! buffers/offsets for every plan in the batch and populates `exch` with
+    //! the shared MPI state, exactly as if `buildMPIStart` had been called on
+    //! each plan individually, but paying the handshake/collective cost only
+    //! once. Must be paired with a subsequent call to `buildMPIFinishMultiple`
+    //! using the same `exch`.
+    static void buildMPIStartMultiple (const ParticleContainerBase& pc0,
+                                       const ParticleBufferMap& map,
+                                       Vector<ParticleCopyPlan*>& plans,
+                                       MultiExchange& exch);
+
+    //! \brief Completes the merged metadata exchange started by
+    //! buildMPIStartMultiple, demultiplexing the combined receive buffer back
+    //! into each plan's own `m_rcv_box_counts/ids/tids/levs/pids` and
+    //! `m_rcv_num_particles`, exactly as `buildMPIFinish` would populate a
+    //! single plan.
+    static void buildMPIFinishMultiple (const ParticleBufferMap& map,
+                                        Vector<ParticleCopyPlan*>& plans,
+                                        MultiExchange& exch);
 
 private:
 

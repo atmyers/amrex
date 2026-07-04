@@ -3,6 +3,7 @@
 
 #include <AMReX_ParticleContainerBase.H>
 #include <AMReX_ParticleContainer.H>
+#include <AMReX_ParticleContainerRedistributeMultiple.H>
 #include <AMReX_ParGDB.H>
 #include <AMReX_Particle_mod_K.H>
 #include <AMReX_ParticleMPIUtil.H>

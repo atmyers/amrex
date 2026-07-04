@@ -1440,14 +1440,15 @@ template <typename ParticleType, int NArrayReal, int NArrayInt,
           template<class> class Allocator, class CellAssignor>
 void
 ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator, CellAssignor>
-::Redistribute_impl (int lev_min, int lev_max, int nGrow, int local, bool remove_negative)
+::RedistributePartition (int lev_min, int& lev_max, int nGrow, int local, bool remove_negative,
+                         ParticleCopyOp& op,
+                         Vector<std::map<std::pair<int, int>, int> >& new_sizes,
+                         int& theEffectiveFinestLevel)
 {
-    if (local) { AMREX_ASSERT(numParticlesOutOfRange(*this, lev_min, lev_max, local) == 0); }
-
-    BL_PROFILE("ParticleContainer::Redistribute_impl()");
+    BL_PROFILE("ParticleContainer::RedistributePartition()");
     BL_PROFILE_VAR_NS("Redistribute_partition", blp_partition);
 
-    int theEffectiveFinestLevel = m_gdb->finestLevel();
+    theEffectiveFinestLevel = m_gdb->finestLevel();
     while (!m_gdb->LevelDefined(theEffectiveFinestLevel)) { theEffectiveFinestLevel--; }
 
     if (std::ssize(m_particles) < theEffectiveFinestLevel+1) {
@@ -1481,10 +1482,9 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator, CellAssig
 #endif
 
     BL_PROFILE_VAR_START(blp_partition);
-    ParticleCopyOp op;
     int num_levels = finest_lev_particles + 1;
     op.setNumLevels(num_levels);
-    Vector<std::map<std::pair<int, int>, int> > new_sizes(num_levels);
+    new_sizes.resize(num_levels);
 #ifndef AMREX_USE_GPU
     const int myproc = ParallelContext::MyProcSub();
 #endif
@@ -1657,22 +1657,16 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator, CellAssig
     }
 #endif
     BL_PROFILE_VAR_STOP(blp_partition);
+}
 
-    ParticleCopyPlan plan;
-
-    plan.build(*this, op, h_redistribute_int_comp,
-               h_redistribute_real_comp, local);
-
-    // by default, this uses The_Arena();
-    amrex::PODVector<char, PolymorphicArenaAllocator<char> > snd_buffer;
-    amrex::PODVector<char, PolymorphicArenaAllocator<char> > rcv_buffer;
-
-    if (use_comms_arena) {
-        snd_buffer.setArena(The_Comms_Arena());
-        rcv_buffer.setArena(The_Comms_Arena());
-    }
-
-    packBuffer(*this, op, plan, snd_buffer);
+template <typename ParticleType, int NArrayReal, int NArrayInt,
+          template<class> class Allocator, class CellAssignor>
+void
+ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator, CellAssignor>
+::ClearMovedParticles (int lev_min, int lev_max, int theEffectiveFinestLevel,
+                       Vector<std::map<std::pair<int, int>, int> >& new_sizes)
+{
+    BL_PROFILE("ParticleContainer::ClearMovedParticles()");
 
     // clear particles from container
     for (int lev = lev_min; lev <= lev_max; ++lev)
@@ -1703,6 +1697,41 @@ ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator, CellAssig
         m_particles.resize(theEffectiveFinestLevel + 1);
         m_dummy_mf.resize(theEffectiveFinestLevel + 1);
     }
+}
+
+template <typename ParticleType, int NArrayReal, int NArrayInt,
+          template<class> class Allocator, class CellAssignor>
+void
+ParticleContainer_impl<ParticleType, NArrayReal, NArrayInt, Allocator, CellAssignor>
+::Redistribute_impl (int lev_min, int lev_max, int nGrow, int local, bool remove_negative)
+{
+    if (local) { AMREX_ASSERT(numParticlesOutOfRange(*this, lev_min, lev_max, local) == 0); }
+
+    BL_PROFILE("ParticleContainer::Redistribute_impl()");
+
+    ParticleCopyOp op;
+    Vector<std::map<std::pair<int, int>, int> > new_sizes;
+    int theEffectiveFinestLevel = 0;
+    RedistributePartition(lev_min, lev_max, nGrow, local, remove_negative,
+                          op, new_sizes, theEffectiveFinestLevel);
+
+    ParticleCopyPlan plan;
+
+    plan.build(*this, op, h_redistribute_int_comp,
+               h_redistribute_real_comp, local);
+
+    // by default, this uses The_Arena();
+    amrex::PODVector<char, PolymorphicArenaAllocator<char> > snd_buffer;
+    amrex::PODVector<char, PolymorphicArenaAllocator<char> > rcv_buffer;
+
+    if (use_comms_arena) {
+        snd_buffer.setArena(The_Comms_Arena());
+        rcv_buffer.setArena(The_Comms_Arena());
+    }
+
+    packBuffer(*this, op, plan, snd_buffer);
+
+    ClearMovedParticles(lev_min, lev_max, theEffectiveFinestLevel, new_sizes);
 
     if (ParallelDescriptor::UseGpuAwareMpi())
     {

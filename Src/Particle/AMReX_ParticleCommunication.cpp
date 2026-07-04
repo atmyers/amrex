@@ -271,6 +271,278 @@ void ParticleCopyPlan::buildMPIFinish (const ParticleBufferMap& map) // NOLINT(r
 #endif // MPI
 }
 
+void ParticleCopyPlan::buildMPIStartMultiple (const ParticleContainerBase& pc0,
+                                              const ParticleBufferMap& map,
+                                              Vector<ParticleCopyPlan*>& plans,
+                                              MultiExchange& exch)
+{
+    BL_PROFILE("ParticleCopyPlan::buildMPIStartMultiple");
+
+#ifdef AMREX_USE_MPI
+    const int NProcs = ParallelContext::NProcsSub();
+    const int MyProc = ParallelContext::MyProcSub();
+
+    if (NProcs == 1) { return; }
+
+    ParticleCopyPlan& plan0 = *plans[0];
+    const Vector<int>& neighbor_procs = plan0.m_neighbor_procs;
+    const auto NNeighborProcs = static_cast<int>(neighbor_procs.size());
+
+    exch.Snds.resize(0);
+    exch.Snds.resize(NProcs, 0);
+
+    exch.Rcvs.resize(0);
+    exch.Rcvs.resize(NProcs, 0);
+
+    for (auto* plan : plans) {
+        plan->m_snd_num_particles.resize(0);
+        plan->m_snd_num_particles.resize(NProcs, 0);
+
+        plan->m_rcv_num_particles.resize(0);
+        plan->m_rcv_num_particles.resize(NProcs, 0);
+
+        plan->m_NumSnds = 0;
+    }
+
+    // container_idx is appended as a 6th field to the usual
+    // [npart, dst_gid, tid, lev, myproc] metadata record so the receiver can
+    // demultiplex incoming records back to the right plan/container.
+    std::map<int, Vector<int> > snd_data;
+
+    exch.NumSnds = 0;
+    for (auto i : neighbor_procs)
+    {
+        auto box_buffer_indices = map.allBucketsOnProc(i);
+        Long nbytes = 0;
+        for (auto bucket : box_buffer_indices)
+        {
+            int dst = map.bucketToGrid(bucket);
+            int tid = map.bucketToTile(bucket);
+            int lev = map.bucketToLevel(bucket);
+
+            for (int c = 0; c < static_cast<int>(plans.size()); ++c)
+            {
+                auto& plan = *plans[c];
+                AMREX_ASSERT(plan.m_box_counts_h[bucket] <= static_cast<unsigned int>(std::numeric_limits<int>::max()));
+                int npart = static_cast<int>(plan.m_box_counts_h[bucket]);
+                if (npart == 0) { continue; }
+                plan.m_snd_num_particles[i] += npart;
+                if (i == MyProc) { continue; }
+                snd_data[i].push_back(npart);
+                snd_data[i].push_back(dst);
+                snd_data[i].push_back(tid);
+                snd_data[i].push_back(lev);
+                snd_data[i].push_back(MyProc);
+                snd_data[i].push_back(c);
+                nbytes += 6*sizeof(int);
+                // plan.m_NumSnds is used downstream only as a boolean "does
+                // this container have any off-proc particles to send" gate
+                // (see communicateParticlesStart/Finish); mirror the same
+                // per-container metadata-byte accounting buildMPIStart would
+                // have produced for this container alone.
+                plan.m_NumSnds += 5*sizeof(int);
+            }
+        }
+        exch.Snds[i] = nbytes;
+        exch.NumSnds += nbytes;
+    }
+
+    plan0.doHandShake(pc0, exch.Snds, exch.Rcvs);
+
+    const int SeqNum = ParallelDescriptor::SeqNum();
+    Long tot_snds_this_proc = 0;
+    Long tot_rcvs_this_proc = 0;
+
+    if (plan0.m_local)
+    {
+        for (int i = 0; i < NNeighborProcs; ++i)
+        {
+            tot_snds_this_proc += exch.Snds[neighbor_procs[i]];
+            tot_rcvs_this_proc += exch.Rcvs[neighbor_procs[i]];
+        }
+    } else {
+        for (int i = 0; i < NProcs; ++i)
+        {
+            tot_snds_this_proc += exch.Snds[i];
+            tot_rcvs_this_proc += exch.Rcvs[i];
+        }
+    }
+
+    if ( (tot_snds_this_proc == 0) && (tot_rcvs_this_proc == 0) )
+    {
+        exch.nrcvs = 0;
+        exch.NumSnds = 0;
+        return;
+    }
+
+    exch.RcvProc.resize(0);
+    exch.rOffset.resize(0);
+    std::size_t TotRcvBytes = 0;
+    for (auto i : neighbor_procs)
+    {
+        if (exch.Rcvs[i] > 0)
+        {
+            exch.RcvProc.push_back(i);
+            exch.rOffset.push_back(TotRcvBytes/sizeof(int));
+            TotRcvBytes += exch.Rcvs[i];
+        }
+    }
+
+    exch.nrcvs = static_cast<int>(exch.RcvProc.size());
+
+    exch.build_stats.resize(0);
+    exch.build_stats.resize(exch.nrcvs);
+
+    exch.build_rreqs.resize(0);
+    exch.build_rreqs.resize(exch.nrcvs);
+
+    exch.rcv_data.resize(TotRcvBytes/sizeof(int));
+
+    for (int i = 0; i < exch.nrcvs; ++i)
+    {
+        const auto Who    = exch.RcvProc[i];
+        const auto offset = exch.rOffset[i];
+        const auto Cnt    = exch.Rcvs[Who];
+
+        AMREX_ASSERT(Cnt > 0);
+        AMREX_ASSERT(Cnt < std::numeric_limits<int>::max());
+        AMREX_ASSERT(Who >= 0 && Who < NProcs);
+
+        exch.build_rreqs[i] = ParallelDescriptor::Arecv((char*) (exch.rcv_data.dataPtr() + offset), Cnt, Who, SeqNum, ParallelContext::CommunicatorSub()).req();
+    }
+
+    Vector<MPI_Request> snd_reqs;
+    Vector<MPI_Status>  snd_stats;
+    for (auto i : neighbor_procs)
+    {
+        if (i == MyProc) { continue; }
+        const auto Who = i;
+        const auto Cnt = exch.Snds[i];
+        if (Cnt == 0) { continue; }
+
+        AMREX_ASSERT(Cnt > 0);
+        AMREX_ASSERT(Who >= 0 && Who < NProcs);
+        AMREX_ASSERT(Cnt < std::numeric_limits<int>::max());
+
+        snd_reqs.push_back(ParallelDescriptor::Asend((char*) snd_data[i].data(), Cnt, Who, SeqNum,
+                                                      ParallelContext::CommunicatorSub()).req());
+    }
+
+    for (auto* plan_ptr : plans)
+    {
+        auto& plan = *plan_ptr;
+        Long psize = plan.m_superparticle_size;
+
+        plan.m_snd_counts.resize(0);
+        plan.m_snd_offsets.resize(0);
+        plan.m_snd_pad_correction_h.resize(0);
+
+        plan.m_snd_offsets.push_back(0);
+        plan.m_snd_pad_correction_h.push_back(0);
+        for (int i = 0; i < NProcs; ++i)
+        {
+            Long nbytes = plan.m_snd_num_particles[i]*psize;
+            std::size_t acd = ParallelDescriptor::sizeof_selected_comm_data_type(nbytes);
+            auto Cnt = static_cast<Long>(amrex::aligned_size(acd, nbytes));
+            Long bytes_to_send = (i == MyProc) ? 0 : Cnt;
+            plan.m_snd_counts.push_back(bytes_to_send);
+            plan.m_snd_offsets.push_back(amrex::aligned_size(Arena::align_size,
+                                                              plan.m_snd_offsets.back() + Cnt));
+            plan.m_snd_pad_correction_h.push_back(plan.m_snd_pad_correction_h.back() + nbytes);
+        }
+
+        for (int i = 0; i < NProcs; ++i)
+        {
+            plan.m_snd_pad_correction_h[i] = plan.m_snd_offsets[i] - plan.m_snd_pad_correction_h[i];
+        }
+
+        plan.m_snd_pad_correction_d.resize(plan.m_snd_pad_correction_h.size());
+        Gpu::copy(Gpu::hostToDevice, plan.m_snd_pad_correction_h.begin(), plan.m_snd_pad_correction_h.end(),
+                  plan.m_snd_pad_correction_d.begin());
+    }
+
+    snd_stats.resize(0);
+    snd_stats.resize(snd_reqs.size());
+    ParallelDescriptor::Waitall(snd_reqs, snd_stats);
+#else
+    amrex::ignore_unused(pc0,map,plans,exch);
+#endif
+}
+
+void ParticleCopyPlan::buildMPIFinishMultiple (const ParticleBufferMap& map,
+                                               Vector<ParticleCopyPlan*>& plans,
+                                               MultiExchange& exch)
+{
+    amrex::ignore_unused(map);
+
+    BL_PROFILE("ParticleCopyPlan::buildMPIFinishMultiple");
+
+#ifdef AMREX_USE_MPI
+
+    const int NProcs = ParallelContext::NProcsSub();
+    if (NProcs == 1) { return; }
+
+    for (auto* plan_ptr : plans)
+    {
+        auto& plan = *plan_ptr;
+        plan.m_rcv_box_offsets.resize(0);
+        plan.m_rcv_box_counts.resize(0);
+        plan.m_rcv_box_ids.resize(0);
+        plan.m_rcv_box_tids.resize(0);
+        plan.m_rcv_box_levs.resize(0);
+        plan.m_rcv_box_pids.resize(0);
+        plan.m_rcv_box_offsets.push_back(0);
+    }
+
+    if (exch.nrcvs > 0)
+    {
+        ParallelDescriptor::Waitall(exch.build_rreqs, exch.build_stats);
+
+        for (int i = 0, N = static_cast<int>(exch.rcv_data.size()); i < N; i+=6)
+        {
+            int container_idx = exch.rcv_data[i+5];
+            auto& plan = *plans[container_idx];
+
+            plan.m_rcv_box_counts.push_back(exch.rcv_data[i]);
+            AMREX_ASSERT(ParallelContext::MyProcSub() == map.procID(exch.rcv_data[i+1], exch.rcv_data[i+2], exch.rcv_data[i+3]));
+            plan.m_rcv_box_ids.push_back(exch.rcv_data[i+1]);
+            plan.m_rcv_box_tids.push_back(exch.rcv_data[i+2]);
+            plan.m_rcv_box_levs.push_back(exch.rcv_data[i+3]);
+            plan.m_rcv_box_pids.push_back(exch.rcv_data[i+4]);
+            plan.m_rcv_box_offsets.push_back(plan.m_rcv_box_offsets.back() + plan.m_rcv_box_counts.back());
+        }
+    }
+
+    for (int j = 0; j < exch.nrcvs; ++j)
+    {
+        const auto Who    = exch.RcvProc[j];
+        const auto offset = exch.rOffset[j];
+        const auto Cnt    = exch.Rcvs[Who]/sizeof(int);
+
+        for (auto i = offset; i < offset + Cnt; i += 6)
+        {
+            int container_idx = exch.rcv_data[i+5];
+            plans[container_idx]->m_rcv_num_particles[Who] += exch.rcv_data[i];
+        }
+    }
+
+    // Mirrors what single-container buildMPIFinish leaves in m_nrcvs: the
+    // number of distinct procs this container will receive particle payload
+    // from. communicateParticlesStart uses this (before recomputing it for
+    // its own purposes) to size m_rcv_pad_correction_h.
+    for (auto* plan_ptr : plans)
+    {
+        auto& plan = *plan_ptr;
+        plan.m_nrcvs = 0;
+        for (int i = 0; i < NProcs; ++i) {
+            if (plan.m_rcv_num_particles[i] > 0) { ++plan.m_nrcvs; }
+        }
+    }
+#else
+    amrex::ignore_unused(map,plans,exch);
+#endif // MPI
+}
+
 void ParticleCopyPlan::doHandShake (const ParticleContainerBase& pc,
                                     const Vector<Long>& Snds,
                                     Vector<Long>& Rcvs) const // NOLINT(readability-convert-member-functions-to-static)
