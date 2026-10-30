@@ -17,8 +17,6 @@ Current Roster
 - Andrew Myers
 - Weiqun Zhang
 
-See: `GitHub team <https://github.com/orgs/AMReX-Codes/teams/amrex-steering-committee>`__
-
 Role
 ^^^^
 
@@ -69,8 +67,6 @@ Current Roster
 - Weiqun Zhang
 - Michael Zingale
 
-See: `GitHub team <https://github.com/orgs/AMReX-Codes/teams/amrex-technical-committee>`__
-
 Role
 ^^^^
 
@@ -109,11 +105,6 @@ TC members can resign or be removed by majority vote by either TC or SC due to i
 
 Contributors
 ------------
-
-Current Roster
-^^^^^^^^^^^^^^
-
-See: `GitHub team <https://github.com/orgs/AMReX-Codes/teams/amrex-contributors>`__
 
 Role
 ^^^^
